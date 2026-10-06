@@ -102,7 +102,7 @@ app.get<{ Params: { key: string } }>('/api/:key', async (req, reply) => {
 // ── Jobs (intervalo, escalonados para não disparar tudo junto) ───────
 const min = (n: number) => n * 60_000;
 
-register('quotes', 30_000, fetchQuotes, (q) => {
+register('quotes', 45_000, fetchQuotes, (q) => {
   broadcast(q);
   void recordQuotes(q.map((x) => ({ symbol: x.symbol, value: x.value })));
 });

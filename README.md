@@ -18,6 +18,8 @@ Nada precisa de recarregar a página:
 
 Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado como "desatualizado".
 
+**Plano B das cotações:** a AwesomeAPI limita por IP (erro 429) e servidores de hospedagem compartilham IPs. Se ela recusar, a API usa automaticamente o câmbio do BCE (Frankfurter) e a cripto da Coinbase, e volta para a principal depois de alguns minutos. Opcional: crie uma chave gratuita na AwesomeAPI e coloque em `AWESOMEAPI_TOKEN` na Railway para ter mais limite.
+
 ## Notícias: 24 h, 7 dias e 30 dias
 
 As notícias coletadas ficam guardadas no Neon (tabela `articles`). Em **Tecnologia** e **Notícias** dá para escolher **24 h · 7 dias · 30 dias**, buscar por texto e filtrar por veículo.
