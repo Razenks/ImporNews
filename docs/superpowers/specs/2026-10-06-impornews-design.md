@@ -39,3 +39,10 @@ Mobile-first. Celular: coluna única, abas fixas embaixo, faixa de cotações ro
 
 ## Erros
 Cada módulo falha isoladamente: se uma fonte cair, serve o último dado em cache marcado como "desatualizado" e o resto do painel segue funcionando.
+
+## Adendo — arquivo de notícias e Tecnologia (06/10/2026)
+- Tabela `articles` (url única, fonte, grupo, categoria, título, resumo, imagem, data) no Neon.
+- Categorias: `brasil`, `tech-br`, `tech-mundo`, `empresas`. `GET /api/articles?cat&days(1|7|30)&group&q&limit&offset`.
+- Retenção: 30 dias de consulta; rotina agendada apaga o que passa de 31 dias (ao iniciar e a cada 6 h). Cotações: 8 dias.
+- Coleta de ~34 fontes a cada 10 min; backfill de 30 dias na partida (idempotente).
+- Seções: 06 Tecnologia (Brasil / Mundo / Empresas), 07 Notícias (Agência Brasil + IBGE), ambas com período, busca, filtro por veículo, aviso de novas e "mostrar mais".

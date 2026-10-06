@@ -1,0 +1,149 @@
+import { useState } from 'react';
+import type { Arc } from '../api';
+import { Empty, Ext, Img, Item, Segmented, Skeleton } from '../components';
+import { ago, dayMonth } from '../format';
+import { useArticles, useDebounced } from '../hooks';
+import { ArticleMore } from './Eleicoes';
+
+type Period = '1d' | '7d' | '30d';
+const DAYS = { '1d': 1, '7d': 7, '30d': 30 } as const;
+const LABEL = { '1d': 'últimas 24 horas', '7d': 'últimos 7 dias', '30d': 'últimos 30 dias' } as const;
+
+function Entry({ a, now, lead = false }: { a: Arc; now: number; lead?: boolean }) {
+  if (lead) {
+    return (
+      <article className="lead">
+        <Img src={a.image} className="lead-img" />
+        <div className="feed-meta">
+          <span className="tag">{a.source}</span>
+          <time dateTime={a.date}>{ago(a.date, now)}</time>
+        </div>
+        <Ext href={a.url} className="lead-title">{a.title}</Ext>
+        {a.summary && <p>{a.summary}</p>}
+      </article>
+    );
+  }
+  return (
+    <Item className="with-img" more={<ArticleMore a={a} />}>
+      <div>
+        <div className="feed-meta">
+          <span className="tag">{a.source}</span>
+          <time dateTime={a.date} title={new Date(a.date).toLocaleString('pt-BR')}>{ago(a.date, now)}</time>
+        </div>
+        <h4 className="headline">{a.title}</h4>
+        {a.summary && <p>{a.summary}</p>}
+      </div>
+      <Img src={a.image} className="thumb" />
+    </Item>
+  );
+}
+
+/**
+ * Notícias guardadas no banco (30 dias): período, busca, filtro por veículo,
+ * aviso de notícias novas e "mostrar mais". Usada em Tecnologia e Notícias.
+ */
+export function ArchiveFeed({ cat, now, lead = false, defaultPeriod = '1d' }: { cat: string; now: number; lead?: boolean; defaultPeriod?: Period }) {
+  const [period, setPeriod] = useState<Period>(defaultPeriod);
+  const [group, setGroup] = useState<string | undefined>();
+  const [text, setText] = useState('');
+  const q = useDebounced(text, 350).trim() || undefined;
+  const days = DAYS[period];
+  const a = useArticles({ cat, days, group, q });
+
+  const since = new Date(now - days * 86_400_000).toISOString();
+  const partial = days >= 7 ? a.groups.filter((g) => g.oldest > since) : [];
+  const chips = a.groups.filter((g) => g.n > 0 || g.grp === group);
+  const [first, ...rest] = a.items;
+  const useLead = lead && !q && !!first;
+  const list = useLead ? rest : a.items;
+
+  return (
+    <div className="archive">
+      <div className="toolbar">
+        <Segmented<Period>
+          label="Período"
+          value={period}
+          onChange={(p) => { setPeriod(p); setGroup(undefined); }}
+          options={[
+            { value: '1d', label: '24 h' },
+            { value: '7d', label: '7 dias' },
+            { value: '30d', label: '30 dias' },
+          ]}
+        />
+        <label className="search">
+          <span className="sr">Buscar nestas notícias</span>
+          <input
+            type="search"
+            inputMode="search"
+            placeholder="Buscar…"
+            value={text}
+            maxLength={80}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {chips.length > 1 && (
+        <div className="chips" role="group" aria-label="Filtrar por fonte">
+          <button type="button" aria-pressed={!group} onClick={() => setGroup(undefined)}>Todas</button>
+          {chips.map((g) => (
+            <button key={g.grp} type="button" aria-pressed={group === g.grp} onClick={() => setGroup(group === g.grp ? undefined : g.grp)}>
+              {g.grp}<b>{g.n}</b>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p className="archive-info">
+        <b>{a.total}</b> {a.total === 1 ? 'notícia' : 'notícias'} · {LABEL[period]}
+        {q ? <> · busca “{q}”</> : null}
+        {days === 30 && <> · o arquivo guarda 30 dias e apaga o resto sozinho</>}
+      </p>
+      {partial.length > 0 && (
+        <p className="archive-note">
+          {partial.length === a.groups.length ? 'Todas as fontes' : `${partial.length} de ${a.groups.length} fontes`} ainda não têm {days} dias
+          de histórico ({partial.slice(0, 4).map((g) => g.grp).join(', ')}{partial.length > 4 ? '…' : ''}). O arquivo cresce a cada dia.
+        </p>
+      )}
+
+      {a.freshCount > 0 && (
+        <button type="button" className="fresh" onClick={a.applyFresh}>
+          <i aria-hidden="true">↑</i> {a.freshCount} {a.freshCount === 1 ? 'nova notícia' : 'novas notícias'}
+        </button>
+      )}
+
+      {a.loading && !a.items.length ? (
+        <Skeleton rows={6} />
+      ) : a.error && !a.items.length ? (
+        <Empty text="Não consegui carregar as notícias agora. Tentando de novo em breve." />
+      ) : !a.items.length ? (
+        <div className="empty-box">
+          <p>{q ? 'Nada encontrado para essa busca neste período.' : 'Nenhuma notícia neste período.'}</p>
+          {days < 30 && (
+            <button type="button" className="more-link" onClick={() => setPeriod(days === 1 ? '7d' : '30d')}>
+              Ver {days === 1 ? 'os últimos 7 dias' : 'os últimos 30 dias'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className={`${useLead ? 'news' : 'plain-list'} ${a.loading ? 'is-loading' : ''}`} key={`${period}|${group ?? ''}|${q ?? ''}`}>
+          {useLead && <Entry a={first} now={now} lead />}
+          <ul className="feed news-list">
+            {list.map((x) => (
+              <Entry key={x.url} a={x} now={now} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {a.items.length > 0 && a.items.length < a.total && (
+        <button type="button" className="more-btn" disabled={a.loadingMore} onClick={a.loadMore}>
+          {a.loadingMore ? 'Carregando…' : `Mostrar mais · ${a.total - a.items.length} restantes`}
+        </button>
+      )}
+      {dayMonth(a.items.at(-1)?.date) && a.items.length > 0 && a.items.length >= a.total && (
+        <p className="archive-end">Fim da lista · a mais antiga é de {dayMonth(a.items.at(-1)?.date)}</p>
+      )}
+    </div>
+  );
+}

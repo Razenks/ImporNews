@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchBundle, fetchHistory, openStream, type Bundle, type Point, type Quote } from './api';
+import {
+  fetchArticles, fetchBundle, fetchHistory, openStream,
+  type Arc, type ArcGroup, type ArcPage, type ArcQuery, type Bundle, type Point, type Quote,
+} from './api';
 
 /** Re-renderiza a cada `ms` — usado para relógios e "há X min". */
 export function useNow(ms = 1000): number {
@@ -87,4 +90,84 @@ export function useHistories(symbols: string[], range: '24h' | '30d'): Record<st
   }, [key, range]);
 
   return data;
+}
+
+/**
+ * Lista do arquivo de notícias, com "mostrar mais" e atualização sozinha:
+ * a cada minuto busca a primeira página e, se houver itens que a lista ainda não tem,
+ * avisa quantos (`fresh`) em vez de bagunçar o que você está lendo.
+ */
+export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
+  const PAGE = 20;
+  const { cat, days, group, q } = query;
+  const [state, setState] = useState<{ items: Arc[]; total: number; groups: ArcGroup[]; loading: boolean; error: boolean }>({
+    items: [], total: 0, groups: [], loading: true, error: false,
+  });
+  const [fresh, setFresh] = useState<ArcPage | null>(null);
+  const [more, setMore] = useState(false);
+  const itemsRef = useRef<Arc[]>([]);
+  itemsRef.current = state.items;
+
+  // troca de filtro: recomeça do zero
+  useEffect(() => {
+    let alive = true;
+    setState((s) => ({ ...s, loading: true, error: false }));
+    setFresh(null);
+    fetchArticles({ cat, days, group, q, limit: PAGE })
+      .then((p) => alive && setState({ items: p.items, total: p.total, groups: p.groups, loading: false, error: false }))
+      .catch(() => alive && setState((s) => ({ ...s, loading: false, error: true })));
+    return () => {
+      alive = false;
+    };
+  }, [cat, days, group, q]);
+
+  // atualização silenciosa
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      if (document.hidden) return;
+      fetchArticles({ cat, days, group, q, limit: PAGE })
+        .then((p) => {
+          if (!alive) return;
+          const have = new Set(itemsRef.current.map((i) => i.url));
+          const novel = p.items.filter((i) => !have.has(i.url));
+          // só avisa se o item é mais novo que o topo atual (evita "novas" por reordenação)
+          const top = itemsRef.current[0]?.date ?? '';
+          setFresh(novel.some((i) => i.date > top) ? p : null);
+          setState((s) => ({ ...s, total: p.total, groups: p.groups }));
+        })
+        .catch(() => {});
+    };
+    const id = setInterval(tick, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [cat, days, group, q]);
+
+  const loadMore = () => {
+    setMore(true);
+    fetchArticles({ cat, days, group, q, limit: PAGE, offset: itemsRef.current.length })
+      .then((p) => setState((s) => ({ ...s, items: [...s.items, ...p.items.filter((i) => !s.items.some((x) => x.url === i.url))], total: p.total })))
+      .finally(() => setMore(false));
+  };
+
+  const applyFresh = () => {
+    if (!fresh) return;
+    setState((s) => ({ ...s, items: fresh.items, total: fresh.total, groups: fresh.groups }));
+    setFresh(null);
+  };
+
+  const freshCount = fresh ? fresh.items.filter((i) => !state.items.some((x) => x.url === i.url)).length : 0;
+  return { ...state, loadingMore: more, loadMore, freshCount, applyFresh };
+}
+
+/** Valor que só "assenta" depois de `ms` sem mudar (para a busca por texto). */
+export function useDebounced<T>(value: T, ms = 350): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return v;
 }

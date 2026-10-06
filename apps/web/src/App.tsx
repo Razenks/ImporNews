@@ -9,6 +9,7 @@ import { Governo } from './sections/Governo';
 import { Mercado } from './sections/Mercado';
 import { Mundo } from './sections/Mundo';
 import { Noticias } from './sections/Noticias';
+import { Tecnologia } from './sections/Tecnologia';
 
 const SECTIONS = [
   { id: 'mercado', n: '01', label: 'Mercado' },
@@ -16,7 +17,8 @@ const SECTIONS = [
   { id: 'eleicoes', n: '03', label: 'Eleições' },
   { id: 'clima', n: '04', label: 'Clima' },
   { id: 'mundo', n: '05', label: 'Mundo' },
-  { id: 'noticias', n: '06', label: 'Notícias' },
+  { id: 'tecnologia', n: '06', label: 'Tecnologia', short: 'Tech' },
+  { id: 'noticias', n: '07', label: 'Notícias' },
 ] as const;
 
 type Id = (typeof SECTIONS)[number]['id'];
@@ -84,7 +86,16 @@ export default function App() {
           <li key={s.id}>
             <button type="button" aria-current={tab === s.id ? 'true' : undefined} onClick={() => go(s.id)}>
               <span className="nav-n">{s.n}</span>
-              <span className="nav-l">{s.label}</span>
+              <span className="nav-l">
+                {'short' in s ? (
+                  <>
+                    <span className="l-full">{s.label}</span>
+                    <span className="l-short">{s.short}</span>
+                  </>
+                ) : (
+                  s.label
+                )}
+              </span>
             </button>
           </li>
         ))}
@@ -123,6 +134,7 @@ export default function App() {
           <div className="pane" data-active={tab === 'eleicoes'}><Eleicoes bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'clima'}><Clima bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'mundo'}><Mundo bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'tecnologia'}><Tecnologia bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
         </main>
 

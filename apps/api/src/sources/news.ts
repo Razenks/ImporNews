@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { getJson, getText, plain } from '../http.js';
+import { cleanUrl, type Row } from './feeds.js';
 
 export interface Article {
   title: string;
@@ -52,8 +53,18 @@ const ibgeDate = (v: unknown): string | null => {
   return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4] ?? '00'}:${m[5] ?? '00'}:00-03:00` : iso(v);
 };
 
-export async function fetchIbge(): Promise<Article[]> {
-  const j = await getJson<any>('https://servicodados.ibge.gov.br/api/v3/noticias/?qtd=10');
+/** Data no formato MM-DD-YYYY que o filtro do IBGE espera. */
+const ibgeParam = (d: Date) =>
+  `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${d.getFullYear()}`;
+
+export async function fetchIbge(opts: { days?: number; page?: number; qtd?: number } = {}): Promise<Article[]> {
+  const q = new URLSearchParams({ qtd: String(opts.qtd ?? 20) });
+  if (opts.days) {
+    q.set('de', ibgeParam(new Date(Date.now() - opts.days * 86_400_000)));
+    q.set('ate', ibgeParam(new Date()));
+  }
+  if (opts.page) q.set('page', String(opts.page));
+  const j = await getJson<any>(`https://servicodados.ibge.gov.br/api/v3/noticias/?${q}`);
   return (j.items ?? []).map((n: any) => {
     let image: string | null = null;
     try {
@@ -88,4 +99,31 @@ export async function fetchOms(): Promise<Outbreak[]> {
     url: `https://www.who.int/emergencies/disease-outbreak-news/item/${o.UrlName}`,
     date: iso(o.PublicationDateAndTime),
   }));
+}
+
+/** Converte as notícias do Brasil para o formato do arquivo. */
+export function toRows(list: Article[], cat: Row['cat'] = 'brasil'): Row[] {
+  return list
+    .filter((a) => a.url && a.title && a.date)
+    .map((a) => ({
+      url: cleanUrl(a.url),
+      source: a.source,
+      grp: a.source,
+      cat,
+      title: a.title,
+      summary: a.summary,
+      image: a.image,
+      date: a.date as string,
+    }));
+}
+
+/** Histórico do IBGE (tem filtro por data): últimos `days` dias, até 3 páginas de 100. */
+export async function backfillIbge(days = 30): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const got = await fetchIbge({ days, page, qtd: 100 });
+    rows.push(...toRows(got));
+    if (got.length < 100) break;
+  }
+  return rows;
 }
