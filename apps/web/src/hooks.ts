@@ -92,6 +92,10 @@ export function useHistories(symbols: string[], range: '24h' | '30d'): Record<st
   return data;
 }
 
+/** Esperas (ms) entre as tentativas automáticas quando a API falha; depois de esgotar, tenta a cada 20 s. */
+const RETRY_DELAYS = [3_000, 8_000, 18_000];
+const SLOW_RETRY = 20_000;
+
 /**
  * Lista do arquivo de notícias, com "mostrar mais" e atualização sozinha:
  * a cada minuto busca a primeira página e, se houver itens que a lista ainda não tem,
@@ -108,18 +112,33 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
   const itemsRef = useRef<Arc[]>([]);
   itemsRef.current = state.items;
 
-  // troca de filtro: recomeça do zero
+  const [tick, setTick] = useState(0);
+
+  // troca de filtro: recomeça do zero. Se a API falhar (reiniciando, deploy), tenta de novo sozinho.
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
     setState((s) => ({ ...s, loading: true, error: false }));
     setFresh(null);
-    fetchArticles({ cat, days, group, q, limit: PAGE })
-      .then((p) => alive && setState({ items: p.items, total: p.total, groups: p.groups, loading: false, error: false }))
-      .catch(() => alive && setState((s) => ({ ...s, loading: false, error: true })));
+    const run = () =>
+      fetchArticles({ cat, days, group, q, limit: PAGE })
+        .then((p) => alive && setState({ items: p.items, total: p.total, groups: p.groups, loading: false, error: false }))
+        .catch(() => {
+          if (!alive) return;
+          if (tries < RETRY_DELAYS.length) {
+            timer = setTimeout(run, RETRY_DELAYS[tries++]);
+          } else {
+            setState((s) => ({ ...s, loading: false, error: true }));
+            timer = setTimeout(run, SLOW_RETRY);
+          }
+        });
+    void run();
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [cat, days, group, q]);
+  }, [cat, days, group, q, tick]);
 
   // atualização silenciosa
   useEffect(() => {
@@ -159,7 +178,7 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
   };
 
   const freshCount = fresh ? fresh.items.filter((i) => !state.items.some((x) => x.url === i.url)).length : 0;
-  return { ...state, loadingMore: more, loadMore, freshCount, applyFresh };
+  return { ...state, loadingMore: more, loadMore, freshCount, applyFresh, reload: () => setTick((t) => t + 1) };
 }
 
 /** Valor que só "assenta" depois de `ms` sem mudar (para a busca por texto). */
@@ -171,9 +190,6 @@ export function useDebounced<T>(value: T, ms = 350): T {
   }, [value, ms]);
   return v;
 }
-
-/** Esperas (ms) entre as tentativas automáticas quando a API falha. */
-const RETRY_DELAYS = [3_000, 8_000, 18_000];
 
 /**
  * Carrega algo uma vez (e de novo quando `deps` mudam). `enabled=false` não faz nada.
@@ -198,7 +214,10 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = tru
         .catch(() => {
           if (!alive) return;
           if (tries < RETRY_DELAYS.length) timer = setTimeout(run, RETRY_DELAYS[tries++]);
-          else setState((s) => ({ data: s.data, loading: false, error: true }));
+          else {
+            setState((s) => ({ data: s.data, loading: false, error: true }));
+            timer = setTimeout(run, SLOW_RETRY);
+          }
         });
     void run();
     return () => {
@@ -248,7 +267,10 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
           if (!alive) return;
           // a API pode estar reiniciando: tenta de novo antes de mostrar erro
           if (tries < RETRY_DELAYS.length) timer = setTimeout(first, RETRY_DELAYS[tries++]);
-          else setS((x) => ({ ...x, items: [], loading: false, error: true }));
+          else {
+            setS((x) => ({ ...x, items: [], loading: false, error: true }));
+            timer = setTimeout(first, SLOW_RETRY);
+          }
         });
     void first();
 

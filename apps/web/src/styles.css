@@ -832,6 +832,29 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
   .place-chip.wide { min-height: 38px; }
 }
 
+/* listas de notícias em colunas no computador */
+@media (min-width: 900px) {
+  .plain-list .feed,
+  .news-list,
+  .local-feed {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 44px;
+    align-items: start;
+  }
+  .plain-list .feed > li,
+  .news-list > li,
+  .local-feed > li { border-top: 1px solid var(--line2); }
+
+  /* destaque: faixa larga com a foto ao lado do texto; as demais notícias embaixo, em 2 colunas */
+  .news { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .news-list { margin-top: 0; }
+  .lead:has(> .media) { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); column-gap: 36px; align-items: center; }
+  .lead:has(> .media) > .media { grid-column: 1; grid-row: 1 / span 4; margin-bottom: 0; }
+  .lead:has(> .media) > :not(.media) { grid-column: 2; }
+  .lead p { max-width: none; }
+}
+
 /* interruptor "sem crimes e tragédias" */
 .calm {
   display: inline-flex;

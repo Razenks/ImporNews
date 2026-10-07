@@ -4,6 +4,7 @@ import { Empty, Ext, Img, Item, Segmented, Skeleton } from '../components';
 import { ago, dayMonth } from '../format';
 import { useArticles, useDebounced } from '../hooks';
 import { ArticleMore } from './Eleicoes';
+import { Failed } from './RegionBits';
 
 type Period = '1d' | '7d' | '30d';
 const DAYS = { '1d': 1, '7d': 7, '30d': 30 } as const;
@@ -117,7 +118,7 @@ export function ArchiveFeed({
       {a.loading && !a.items.length ? (
         <Skeleton rows={6} />
       ) : a.error && !a.items.length ? (
-        <Empty text="Não consegui carregar as notícias agora. Tentando de novo em breve." />
+        <Failed text="Não consegui carregar as notícias agora. Estou tentando de novo sozinho." onRetry={a.reload} />
       ) : !a.items.length ? (
         <div className="empty-box">
           <p>{q ? 'Nada encontrado para essa busca neste período.' : 'Nenhuma notícia neste período.'}</p>
