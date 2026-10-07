@@ -42,7 +42,9 @@ function Entry({ a, now, lead = false }: { a: Arc; now: number; lead?: boolean }
  * Notícias guardadas no banco (30 dias): período, busca, filtro por veículo,
  * aviso de notícias novas e "mostrar mais". Usada em Tecnologia e Notícias.
  */
-export function ArchiveFeed({ cat, now, lead = false, defaultPeriod = '1d' }: { cat: string; now: number; lead?: boolean; defaultPeriod?: Period }) {
+export function ArchiveFeed({
+  cat, now, lead = false, defaultPeriod = '1d', coverage = true,
+}: { cat: string; now: number; lead?: boolean; defaultPeriod?: Period; coverage?: boolean }) {
   const [period, setPeriod] = useState<Period>(defaultPeriod);
   const [group, setGroup] = useState<string | undefined>();
   const [text, setText] = useState('');
@@ -51,7 +53,7 @@ export function ArchiveFeed({ cat, now, lead = false, defaultPeriod = '1d' }: { 
   const a = useArticles({ cat, days, group, q });
 
   const since = new Date(now - days * 86_400_000).toISOString();
-  const partial = days >= 7 ? a.groups.filter((g) => g.oldest > since) : [];
+  const partial = coverage && days >= 7 ? a.groups.filter((g) => g.oldest > since) : [];
   const chips = a.groups.filter((g) => g.n > 0 || g.grp === group);
   const [first, ...rest] = a.items;
   const useLead = lead && !q && !!first;

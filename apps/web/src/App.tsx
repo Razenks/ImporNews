@@ -11,8 +11,11 @@ import { Governo } from './sections/Governo';
 import { Mercado } from './sections/Mercado';
 import { Mundo } from './sections/Mundo';
 import { Noticias } from './sections/Noticias';
-import { Regiao } from './sections/Regiao';
+import { Bancada } from './sections/Bancada';
+import { Boas } from './sections/Boas';
+import { Locais } from './sections/Locais';
 import { Tecnologia } from './sections/Tecnologia';
+import { Tempo } from './sections/Tempo';
 
 /**
  * Cada item do menu é um "painel". No celular mostra um por vez; no computador, todos juntos.
@@ -20,11 +23,13 @@ import { Tecnologia } from './sections/Tecnologia';
  */
 const SECTIONS = [
   { id: 'mercado', n: '01', label: 'Mercado', anchor: 'mercado', keywords: 'dólar dolar euro libra bitcoin ethereum selic ipca câmbio cotação juros inflação' },
-  { id: 'politica', n: '02', label: 'Política', anchor: 'governo', keywords: 'congresso câmara camara senado deputados senadores eleições eleicao votação projeto lei pec 6x1 tse' },
-  { id: 'regiao', n: '03', label: 'Minha região', short: 'Região', anchor: 'regiao', keywords: 'cidade estado região local clima tempo previsão chuva alerta bancada notícias daqui campo grande' },
-  { id: 'mundo', n: '04', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
-  { id: 'tecnologia', n: '05', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
-  { id: 'noticias', n: '06', label: 'Notícias', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
+  { id: 'politica', n: '02', label: 'Política', anchor: 'governo', keywords: 'congresso câmara camara senado deputados senadores bancada eleições eleicao votação projeto lei pec 6x1 tse' },
+  { id: 'tempo', n: '03', label: 'Tempo', anchor: 'tempo', keywords: 'clima tempo previsão chuva calor frio alerta temperatura inmet umidade' },
+  { id: 'local', n: '04', label: 'Notícias locais', short: 'Local', anchor: 'local', keywords: 'cidade estado região local notícias daqui bairro campo grande' },
+  { id: 'mundo', n: '05', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
+  { id: 'tecnologia', n: '06', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
+  { id: 'noticias', n: '07', label: 'Notícias', short: 'Brasil', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
+  { id: 'boas', n: '08', label: 'Notícias boas', short: 'Boas', anchor: 'boas', keywords: 'boas notícias positivas alegria solidariedade conquista esperança feliz' },
 ] as const;
 
 type Id = (typeof SECTIONS)[number]['id'];
@@ -196,14 +201,17 @@ export default function App() {
           <div className="pane" data-active={tab === 'politica'}>
             <Governo bundle={bundle} now={now} />
             <Eleicoes bundle={bundle} now={now} />
+            <Bancada now={now} />
           </div>
-          <div className="pane" data-active={tab === 'regiao'}>
-            <Regiao bundle={bundle} now={now} />
+          <div className="pane" data-active={tab === 'tempo'}>
+            <Tempo bundle={bundle} now={now} />
             <Clima bundle={bundle} now={now} />
           </div>
+          <div className="pane" data-active={tab === 'local'}><Locais bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'mundo'}><Mundo bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'tecnologia'}><Tecnologia bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'boas'}><Boas bundle={bundle} now={now} /></div>
         </main>
 
         <footer className="foot">

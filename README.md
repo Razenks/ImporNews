@@ -20,15 +20,24 @@ Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado
 
 **Plano B das cotações:** a AwesomeAPI limita por IP (erro 429) e servidores de hospedagem compartilham IPs. Se ela recusar, a API usa automaticamente o câmbio do BCE (Frankfurter) e a cripto da Coinbase, e volta para a principal depois de alguns minutos. Opcional: crie uma chave gratuita na AwesomeAPI e coloque em `AWESOMEAPI_TOKEN` na Railway para ter mais limite.
 
-## Minha região
+## Abas
 
-Em **Minha região** (ou no botão da região, no topo/menu) a pessoa escolhe o **estado** e, se quiser, a **cidade** (qualquer uma das 5.570, lista do IBGE). A escolha fica salva só naquele aparelho (sem login). A partir daí:
+Mercado · Política · Tempo · Notícias locais · Mundo · Tecnologia · Notícias · Notícias boas
 
-- **Notícias da cidade ou do estado**, de 24 h a 30 dias, com busca, filtro por veículo e escolha entre "Cidade" e "Estado". Fontes: Google Notícias (que reúne os veículos locais, prefeituras e câmaras) + feeds próprios de veículos locais (hoje MS: Campo Grande News e Primeira Página; para incluir outros, edite `DIRECT` em `apps/api/src/sources/local.ts`). O link abre a matéria no site do veículo.
-- **Clima da cidade** (hoje + 3 dias) e **alertas do INMET** do estado.
-- **Bancada federal do estado**: senadores e deputados, com link para o perfil de cada um.
+Quem escolhe a região (botão no topo/menu: **estado** e, se quiser, **cidade**, qualquer uma das 5.570 do IBGE) personaliza três abas. A escolha fica salva só naquele aparelho, sem login.
 
-As buscas de região são feitas na hora (com cache de 10 min no servidor), então não ocupam o banco.
+- **Tempo**: tempo agora e previsão da cidade, alertas do INMET do estado, capitais e alertas do país.
+- **Notícias locais**: da cidade ou do estado, de 24 h a 30 dias, com busca, filtro por veículo e o interruptor **"Sem crimes e tragédias"** (esconde manchetes de assalto, assassinato, acidente etc.). Fontes: Google Notícias (que reúne veículos locais, prefeituras e câmaras) + feeds próprios (hoje MS: Campo Grande News e Primeira Página; para incluir outros, edite `DIRECT` em `apps/api/src/sources/local.ts`). O link abre a matéria no site do veículo.
+- **Política → Sua bancada**: deputados e senadores do estado, com link para o perfil de cada um.
+
+As buscas de região são feitas na hora (cache de 10 min no servidor), sem ocupar o banco.
+
+## Notícias boas
+
+Aba só com conquistas, descobertas e solidariedade, em dois modos: **Brasil e mundo** e **Perto de mim** (usa a região escolhida).
+
+- **Fontes feitas para isso**: Só Notícia Boa (BR), Good News Network, Reasons to be Cheerful e Optimist Daily (em inglês).
+- **Filtro por palavras** (`apps/api/src/mood.ts`): o que já coletamos de Brasil e mundo e uma busca específica no Google Notícias só entram se o título tiver palavra de conquista, descoberta ou solidariedade e nenhuma palavra de crime, morte, acidente ou guerra. Notícias de produto/empresa de tecnologia não contam. A classificação é por palavras-chave, então pode escapar uma manchete ou outra; para ajustar, edite as listas em `mood.ts`.
 
 ## Busca e links
 

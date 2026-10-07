@@ -609,14 +609,15 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
 .more-btn:disabled { opacity: 0.6; cursor: progress; }
 
 /* 7 abas na barra inferior: nome curto no celular */
-.tabbar ol { grid-template-columns: repeat(7, 1fr); }
+.tabbar ol { grid-template-columns: repeat(8, 1fr); }
 .nav-l .l-short { display: none; }
 @media (max-width: 1099.98px) {
   .nav-l .l-full { display: none; }
   .nav-l .l-short { display: inline; }
 }
 @media (max-width: 420px) {
-  .tabbar .nav-l { font-size: 10px; letter-spacing: -0.02em; }
+  .tabbar .nav-l { font-size: 9.5px; letter-spacing: -0.03em; }
+  .tabbar .nav-n { font-size: 8.5px; }
 }
 
 /* ───────────────────────── região, busca geral e links ───────────────────────── */
@@ -830,6 +831,30 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
   .rail-tools + .railnav { margin-top: 24px; }
   .place-chip.wide { min-height: 38px; }
 }
+
+/* interruptor "sem crimes e tragédias" */
+.calm {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  font: 400 12px/1 var(--mono);
+  color: var(--t2);
+  transition: border-color 0.3s, color 0.3s, background 0.3s, transform 0.15s;
+}
+.calm:hover { border-color: var(--t3); background: var(--s1); }
+.calm:active { transform: scale(0.98); }
+.calm i { position: relative; flex: none; width: 32px; height: 18px; border: 1px solid var(--t3); transition: border-color 0.3s; }
+.calm i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; background: var(--t3); transition: transform 0.3s var(--ease), background 0.3s; }
+.calm em { font-style: normal; color: var(--t3); }
+.calm[aria-pressed='true'] { border-color: var(--v); color: var(--t1); }
+.calm[aria-pressed='true'] i { border-color: var(--v); }
+.calm[aria-pressed='true'] i::after { background: var(--v); transform: translateX(14px); }
+.calm[aria-pressed='true'] em { color: var(--v2); }
+.region-grid.first { margin-top: 6px; }
 
 /* Animações vêm ligadas (o site foi pedido assim). Quem preferir, desliga no botão do rodapé:
    isso grava data-motion="off" no <html>. */

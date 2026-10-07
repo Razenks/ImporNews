@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { getText, plain } from '../http.js';
 
-export type Cat = 'brasil' | 'tech-br' | 'tech-mundo' | 'empresas';
+export type Cat = 'brasil' | 'tech-br' | 'tech-mundo' | 'empresas' | 'boas';
 
 /** Uma notícia pronta para o arquivo. */
 export interface Row {

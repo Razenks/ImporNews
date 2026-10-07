@@ -1,5 +1,6 @@
 import pg from 'pg';
 import type { Row } from './sources/feeds.js';
+import { isBad, isGood } from './mood.js';
 
 export interface Point { t: number; v: number }
 
@@ -35,7 +36,12 @@ export async function initDb(): Promise<void> {
         fetched_at   timestamptz not null default now()
       );
       create index if not exists articles_cat_pub on articles (cat, published_at desc);
+
+      -- notícias boas: marcadas na gravação (ver mood.ts)
+      alter table articles add column if not exists good boolean not null default false;
+      create index if not exists articles_good_pub on articles (published_at desc) where good;
     `);
+    await markGoodBackfill();
     console.log('[db] Neon conectado');
   } catch (err) {
     console.warn('[db] indisponível, usando memória:', err instanceof Error ? err.message : err);
@@ -107,6 +113,28 @@ export async function purgeOld(): Promise<{ articles: number; quotes: number }> 
   return { articles: a.rowCount ?? 0, quotes: q.rowCount ?? 0 };
 }
 
+/** Fontes de "boas notícias" entram como boas, salvo se a manchete for pesada; as demais passam pelo filtro. */
+// notícias de produto/empresa de tecnologia não contam como "boas notícias"
+const TECH_CATS = new Set(['tech-br', 'tech-mundo', 'empresas']);
+const isGoodRow = (r: Row): boolean =>
+  TECH_CATS.has(r.cat) ? false : r.cat === 'boas' ? !isBad(r.title, r.summary) : isGood(r.title, r.summary);
+
+/** Recalcula o selo "boa" de tudo o que está guardado (a regra pode ter mudado). Roda ao iniciar. */
+async function markGoodBackfill(): Promise<void> {
+  if (!pool) return;
+  const { rows } = await pool.query(`select url, cat, title, summary, good from articles`);
+  const want = new Set(rows.filter((r) => isGoodRow(r as Row)).map((r) => r.url as string));
+  const toTrue = rows.filter((r) => want.has(r.url) && !r.good).map((r) => r.url as string);
+  const toFalse = rows.filter((r) => !want.has(r.url) && r.good).map((r) => r.url as string);
+  for (let i = 0; i < toTrue.length; i += 500) {
+    await pool.query(`update articles set good = true where url = any($1::text[])`, [toTrue.slice(i, i + 500)]);
+  }
+  for (let i = 0; i < toFalse.length; i += 500) {
+    await pool.query(`update articles set good = false where url = any($1::text[])`, [toFalse.slice(i, i + 500)]);
+  }
+  console.log(`[db] notícias boas: ${want.size} (+${toTrue.length} / -${toFalse.length})`);
+}
+
 /** Guarda notícias (sem duplicar pelo link). Retorna quantas eram novas. */
 export async function ingest(rows: Row[]): Promise<number> {
   if (!rows.length) return 0;
@@ -135,16 +163,18 @@ export async function ingest(rows: Row[]): Promise<number> {
     for (let i = 0; i < uniq.length; i += 400) {
       const b = uniq.slice(i, i + 400);
       const { rows: res } = await pool.query(
-        `insert into articles (url, source, grp, cat, title, summary, image, published_at)
-         select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[])
+        `insert into articles (url, source, grp, cat, title, summary, image, published_at, good)
+         select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::boolean[])
          on conflict (url) do update
             set title = excluded.title,
                 summary = case when excluded.summary <> '' then excluded.summary else articles.summary end,
-                image = coalesce(articles.image, excluded.image)
+                image = coalesce(articles.image, excluded.image),
+                good = excluded.good
          returning (xmax = 0) as inserted`,
         [
           b.map((r) => r.url), b.map((r) => r.source), b.map((r) => r.grp), b.map((r) => r.cat),
           b.map((r) => r.title), b.map((r) => r.summary), b.map((r) => r.image), b.map((r) => r.date),
+          b.map(isGoodRow),
         ],
       );
       added += res.filter((x) => x.inserted).length;
@@ -180,11 +210,14 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => '\\' + c);
 
 export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
   const since = Date.now() - q.days * 86_400_000;
+  const goodOnly = q.cats.length === 1 && q.cats[0] === 'boas';
 
   if (pool) {
     try {
       const params: unknown[] = [q.cats, q.days];
-      let where = `cat = any($1::text[]) and published_at > now() - ($2::int * interval '1 day')`;
+      let where = goodOnly
+        ? `good and $1::text[] is not null and published_at > now() - ($2::int * interval '1 day')`
+        : `cat = any($1::text[]) and published_at > now() - ($2::int * interval '1 day')`;
       if (q.group) {
         params.push(q.group);
         where += ` and grp = $${params.length}`;
@@ -205,7 +238,7 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
           `select grp,
                   (count(*) filter (where published_at > now() - ($2::int * interval '1 day')))::int as n,
                   min(published_at) as oldest
-             from articles where cat = any($1::text[])
+             from articles where ${goodOnly ? 'good and $1::text[] is not null' : 'cat = any($1::text[])'}
             group by grp order by n desc, grp`,
           [q.cats, q.days],
         ),
@@ -225,7 +258,7 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
 
   // fallback em memória
   const needle = q.q?.toLowerCase();
-  const all = [...memArticles.values()].filter((r) => q.cats.includes(r.cat));
+  const all = [...memArticles.values()].filter((r) => (goodOnly ? isGoodRow(r) : q.cats.includes(r.cat)));
   const inPeriod = all.filter((r) => Date.parse(r.date) > since);
   const filtered = inPeriod
     .filter((r) => !q.group || r.grp === q.group)

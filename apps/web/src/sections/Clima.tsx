@@ -14,7 +14,7 @@ export function Clima({ bundle, now }: { bundle: Bundle | null; now: number }) {
   const sev = alerts ? Object.entries(alerts.porSeveridade).sort((x, y) => y[1] - x[1]) : [];
 
   return (
-    <section id="clima" className="section" aria-labelledby="clima-t" data-sec="regiao">
+    <section id="clima" className="section" aria-labelledby="clima-t" data-sec="tempo">
       <SectionHead id="clima" n="·" title="Brasil: capitais e alertas" env={[w, a]} now={now} />
 
       <div className="clima">

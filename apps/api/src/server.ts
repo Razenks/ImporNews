@@ -74,7 +74,7 @@ app.get<{ Params: { symbol: string }; Querystring: { range?: string } }>(
 );
 
 // Arquivo de notícias: período de 1 a 30 dias, por categoria, veículo e texto.
-const CATS = new Set(['brasil', 'tech-br', 'tech-mundo', 'empresas']);
+const CATS = new Set(['brasil', 'tech-br', 'tech-mundo', 'empresas', 'boas']);
 const int = (v: string | undefined, d: number, lo: number, hi: number): number => {
   const n = Number.parseInt(v ?? '', 10);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
@@ -100,7 +100,7 @@ app.get<{ Querystring: { cat?: string; days?: string; group?: string; q?: string
 );
 
 // ── Minha região ─────────────────────────────────────────────────────
-type LocalQ = { uf?: string; city?: string; scope?: string; days?: string; q?: string; source?: string; limit?: string; offset?: string };
+type LocalQ = { uf?: string; city?: string; scope?: string; days?: string; q?: string; source?: string; limit?: string; offset?: string; good?: string; calm?: string };
 
 app.get<{ Querystring: LocalQ }>('/api/local/news', async (req, reply) => {
   const uf = req.query.uf?.toUpperCase();
@@ -110,7 +110,7 @@ app.get<{ Querystring: LocalQ }>('/api/local/news', async (req, reply) => {
   const scope = req.query.scope === 'state' || !city ? 'state' : 'city';
   try {
     const out = await localNews(
-      { uf, city, scope, days, q: req.query.q?.trim().slice(0, 60) || undefined },
+      { uf, city, scope, days, q: req.query.q?.trim().slice(0, 60) || undefined, good: req.query.good === '1', calm: req.query.calm === '1' },
       { source: req.query.source?.slice(0, 60) || undefined, limit: int(req.query.limit, 20, 1, 50), offset: int(req.query.offset, 0, 0, 200) },
     );
     reply.header('cache-control', 'public, max-age=60');

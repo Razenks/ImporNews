@@ -3,6 +3,7 @@ import { arr, fetchFeed, str, xmlParse, type FeedDef } from './feeds.js';
 import { wmoLabel } from './weather.js';
 import { memo } from '../memo.js';
 import { CAPITAL, UFS, norm } from '../ufs.js';
+import { isBad, isGood } from '../mood.js';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -25,13 +26,13 @@ const DIRECT: Record<string, FeedDef[]> = {
   ],
 };
 
-const GN = (path: string) => `https://news.google.com/rss/${path}${path.includes('?') ? '&' : '?'}hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+export const GN = (path: string) => `https://news.google.com/rss/${path}${path.includes('?') ? '&' : '?'}hl=pt-BR&gl=BR&ceid=BR:pt-419`;
 
 /** Só letras, números, espaço e hífen: o texto vai para uma busca externa. */
 const clean = (s: string | undefined, max = 60): string =>
   (s ?? '').replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
-async function googleNews(url: string): Promise<LocalItem[]> {
+export async function googleNews(url: string): Promise<LocalItem[]> {
   const res = await fetch(url, {
     headers: { 'user-agent': 'Mozilla/5.0 (compatible; ImporNews/1.0)', accept: 'application/rss+xml,*/*' },
     signal: AbortSignal.timeout(20_000),
@@ -57,14 +58,21 @@ export interface LocalNewsQuery {
   scope: 'city' | 'state';
   days: 1 | 7 | 30;
   q?: string;
+  /** só notícias boas (conquistas, solidariedade…) */
+  good?: boolean;
+  /** esconde crimes e tragédias */
+  calm?: boolean;
 }
+
+const GOOD_TERMS = '(conquista OR inauguração OR solidariedade OR premiada OR campeã OR campeão OR "boa notícia" OR homenagem OR vitória OR medalha OR doação OR festival OR formatura)';
+const NOT_BAD = '-morte -assassinato -assalto -tiroteio -acidente -preso -tragédia';
 
 async function loadLocalNews(p: LocalNewsQuery): Promise<LocalItem[]> {
   const state = UFS[p.uf];
   const city = p.scope === 'city' ? clean(p.city) : '';
   const extra = clean(p.q);
   const base = city ? `"${city}" ("${p.uf}" OR "${state}")` : `"${state}"`;
-  const query = `${base}${extra ? ` ${extra}` : ''} when:${p.days}d`;
+  const query = `${base}${extra ? ` ${extra}` : ''}${p.good ? ` ${GOOD_TERMS} ${NOT_BAD}` : ''} when:${p.days}d`;
 
   const jobs: Promise<LocalItem[]>[] = [googleNews(GN(`search?q=${encodeURIComponent(query)}`))];
   // a seção "Local" do Google é a mais precisa para a cidade, mas só existe para o dia
@@ -97,6 +105,7 @@ async function loadLocalNews(p: LocalNewsQuery): Promise<LocalItem[]> {
       const hay = norm(`${i.title} ${i.summary}`);
       return (!needle || hay.includes(needle)) && words.every((w) => hay.includes(w));
     })
+    .filter((i) => (p.good ? isGood(i.title, i.summary) : p.calm ? !isBad(i.title, i.summary) : true))
     .sort((a, b) => b.date.localeCompare(a.date))
     .filter((i) => {
       const k = norm(i.title).slice(0, 70);
@@ -108,7 +117,7 @@ async function loadLocalNews(p: LocalNewsQuery): Promise<LocalItem[]> {
 }
 
 export async function localNews(p: LocalNewsQuery, opts: { source?: string; limit: number; offset: number }) {
-  const key = `news|${p.uf}|${norm(p.city ?? '')}|${p.scope}|${p.days}|${norm(p.q ?? '')}`;
+  const key = `news|${p.uf}|${norm(p.city ?? '')}|${p.scope}|${p.days}|${norm(p.q ?? '')}|${p.good ? 'g' : p.calm ? 'c' : ''}`;
   const list = await memo(key, 10 * MIN, () => loadLocalNews(p));
 
   const counts = new Map<string, number>();

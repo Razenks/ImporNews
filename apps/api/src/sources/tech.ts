@@ -1,6 +1,8 @@
 import { getJson, getText, plain } from '../http.js';
 import { fetchFeed, pool, type FeedDef, type Row } from './feeds.js';
 import { ingest } from '../db.js';
+import { googleNews, GN } from './local.js';
+import { isGood } from '../mood.js';
 
 /**
  * Fontes de tecnologia. Só sites de notícia e newsrooms oficiais.
@@ -26,6 +28,12 @@ export const FEEDS: FeedDef[] = [
   { source: 'IEEE Spectrum', cat: 'tech-mundo', url: 'https://spectrum.ieee.org/feeds/feed.rss' },
   { source: 'Engadget', cat: 'tech-mundo', url: 'https://www.engadget.com/rss.xml' },
   { source: 'The Register', cat: 'tech-mundo', url: 'https://www.theregister.com/headlines.atom' },
+
+  // ── Boas notícias (sites feitos para isso; o filtro tira o que for pesado) ──────
+  { source: 'Só Notícia Boa', cat: 'boas', url: 'https://www.sonoticiaboa.com.br/feed/' },
+  { source: 'Good News Network', cat: 'boas', url: 'https://www.goodnewsnetwork.org/feed/' },
+  { source: 'Reasons to be Cheerful', cat: 'boas', url: 'https://reasonstobecheerful.world/feed/' },
+  { source: 'Optimist Daily', cat: 'boas', url: 'https://www.optimistdaily.com/feed/' },
 
   // ── Empresas (newsrooms oficiais) ─────────────────────────────────
   { source: 'NVIDIA', cat: 'empresas', url: 'https://blogs.nvidia.com/feed/' },
@@ -143,6 +151,18 @@ export async function fetchAnthropic(): Promise<Row[]> {
   return out;
 }
 
+// ── Boas notícias do Brasil via Google Notícias ───────────────────────
+
+const GOOD_Q =
+  '("boa notícia" OR conquista OR recorde OR inauguração OR descoberta OR solidariedade OR premiada OR campeã OR campeão OR "salva vidas") -morte -assassinato -assalto -tiroteio -acidente -preso -tragédia';
+
+async function fetchGoogleGood(days: number): Promise<Row[]> {
+  const items = await googleNews(GN(`search?q=${encodeURIComponent(`${GOOD_Q} when:${days}d`)}`));
+  return items
+    .filter((i) => isGood(i.title))
+    .map((i) => ({ url: i.url, source: i.source, grp: i.source, cat: 'boas' as const, title: i.title, summary: '', image: null, date: i.date }));
+}
+
 // ── Coleta ───────────────────────────────────────────────────────────
 
 export interface CollectStats {
@@ -157,6 +177,7 @@ export async function collectTech(): Promise<CollectStats> {
   const jobs: { name: string; run: () => Promise<Row[]> }[] = [
     ...FEEDS.map((f) => ({ name: f.source, run: () => fetchFeed(f) })),
     { name: 'Hacker News', run: () => fetchHackerNews(2, 120) },
+    { name: 'Google Notícias · boas', run: () => fetchGoogleGood(3) },
     { name: 'Anthropic', run: fetchAnthropic },
   ];
   const results = await pool(jobs, 6, (j) => j.run());
@@ -193,5 +214,6 @@ export async function backfillTech(days = 30): Promise<number> {
   });
 
   added += await ingest(await fetchHackerNews(days, 200, 2).catch(() => []));
+  added += await ingest(await fetchGoogleGood(days).catch(() => []));
   return added;
 }

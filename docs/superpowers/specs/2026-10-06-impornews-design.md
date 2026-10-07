@@ -52,3 +52,7 @@ Cada módulo falha isoladamente: se uma fonte cair, serve o último dado em cach
 - "Minha região": UF + cidade (IBGE) no `localStorage`. Endpoints `/api/local/{news,cidades,clima,bancada,alertas}`; notícias via Google Notícias RSS + feeds locais, com cache em memória (10 min), sem gravar no banco.
 - Busca geral `/api/search` (arquivo de 30 dias + projetos da Câmara e do Senado) e `/api/congresso/busca`.
 - Congresso: links em votações (sessão/evento ou matéria), projetos, matérias do Senado e agenda.
+
+## Adendo — abas Tempo, Notícias locais e Notícias boas (07/10/2026)
+- "Minha região" dividida em Tempo e Notícias locais; bancada passou para Política. 8 abas no total.
+- Notícias boas: coluna `articles.good` (marcada na gravação por `mood.ts`), fontes dedicadas (categoria `boas`) e busca positiva no Google Notícias; "Perto de mim" usa `/api/local/news?good=1`. Interruptor "sem crimes e tragédias" usa `calm=1`.

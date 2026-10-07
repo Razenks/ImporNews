@@ -159,6 +159,10 @@ export interface LocalNewsQuery {
   source?: string;
   limit?: number;
   offset?: number;
+  /** só notícias boas */
+  good?: boolean;
+  /** esconde crimes e tragédias */
+  calm?: boolean;
 }
 
 export function fetchLocalNews(q: LocalNewsQuery): Promise<LocalNewsPage> {
@@ -166,6 +170,8 @@ export function fetchLocalNews(q: LocalNewsQuery): Promise<LocalNewsPage> {
   if (q.city) p.set('city', q.city);
   if (q.q) p.set('q', q.q);
   if (q.source) p.set('source', q.source);
+  if (q.good) p.set('good', '1');
+  else if (q.calm) p.set('calm', '1');
   if (q.offset) p.set('offset', String(q.offset));
   return get<LocalNewsPage>(`/api/local/news?${p}`);
 }
