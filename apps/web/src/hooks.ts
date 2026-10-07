@@ -172,25 +172,42 @@ export function useDebounced<T>(value: T, ms = 350): T {
   return v;
 }
 
-/** Carrega algo uma vez (e de novo quando `deps` mudam). `enabled=false` não faz nada. */
+/** Esperas (ms) entre as tentativas automáticas quando a API falha. */
+const RETRY_DELAYS = [3_000, 8_000, 18_000];
+
+/**
+ * Carrega algo uma vez (e de novo quando `deps` mudam). `enabled=false` não faz nada.
+ * Se falhar, tenta sozinho mais 3 vezes (a API pode estar reiniciando) antes de mostrar erro;
+ * `reload()` tenta de novo na hora.
+ */
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = true) {
   const [state, setState] = useState<{ data: T | null; loading: boolean; error: boolean }>({ data: null, loading: enabled, error: false });
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!enabled) {
       setState({ data: null, loading: false, error: false });
       return;
     }
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
     setState((s) => ({ data: s.data, loading: true, error: false }));
-    fn()
-      .then((data) => alive && setState({ data, loading: false, error: false }))
-      .catch(() => alive && setState((s) => ({ data: s.data, loading: false, error: true })));
+    const run = () =>
+      fn()
+        .then((data) => alive && setState({ data, loading: false, error: false }))
+        .catch(() => {
+          if (!alive) return;
+          if (tries < RETRY_DELAYS.length) timer = setTimeout(run, RETRY_DELAYS[tries++]);
+          else setState((s) => ({ data: s.data, loading: false, error: true }));
+        });
+    void run();
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, enabled]);
-  return state;
+  }, [...deps, enabled, tick]);
+  return { ...state, reload: () => setTick((t) => t + 1) };
 }
 
 /**
@@ -211,6 +228,7 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
   });
   const [fresh, setFresh] = useState<X | null>(null);
   const [more, setMore] = useState(false);
+  const [tick, setTick] = useState(0);
   const ref = useRef(s.items);
   ref.current = s.items;
   const pageRef = useRef(page);
@@ -219,11 +237,20 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
     setS((x) => ({ ...x, loading: true, error: false }));
     setFresh(null);
-    pageRef.current(0, PAGE)
-      .then(({ items, ...extra }) => alive && setS({ items, extra: extra as Omit<X, 'items'>, loading: false, error: false }))
-      .catch(() => alive && setS((x) => ({ ...x, items: [], loading: false, error: true })));
+    const first = () =>
+      pageRef.current(0, PAGE)
+        .then(({ items, ...extra }) => alive && setS({ items, extra: extra as Omit<X, 'items'>, loading: false, error: false }))
+        .catch(() => {
+          if (!alive) return;
+          // a API pode estar reiniciando: tenta de novo antes de mostrar erro
+          if (tries < RETRY_DELAYS.length) timer = setTimeout(first, RETRY_DELAYS[tries++]);
+          else setS((x) => ({ ...x, items: [], loading: false, error: true }));
+        });
+    void first();
 
     const id = setInterval(() => {
       if (document.hidden) return;
@@ -238,10 +265,11 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
     }, refreshMs);
     return () => {
       alive = false;
+      clearTimeout(timer);
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, enabled]);
+  }, [...deps, enabled, tick]);
 
   const loadMore = () => {
     setMore(true);
@@ -264,5 +292,5 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
   };
 
   const freshCount = fresh ? fresh.items.filter((i) => !s.items.some((y) => keyOf(y) === keyOf(i))).length : 0;
-  return { ...s, loadingMore: more, loadMore, freshCount, applyFresh };
+  return { ...s, loadingMore: more, loadMore, freshCount, applyFresh, reload: () => setTick((t) => t + 1) };
 }

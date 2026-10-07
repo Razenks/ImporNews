@@ -13,6 +13,8 @@ export function PlacePicker() {
   const [text, setText] = useState('');
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listErr, setListErr] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [hint, setHint] = useState('');
@@ -32,6 +34,7 @@ export function PlacePicker() {
 
   // cidades do estado escolhido
   useEffect(() => {
+    setListErr(false);
     if (!uf) {
       setCities([]);
       return;
@@ -42,18 +45,33 @@ export function PlacePicker() {
       return;
     }
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
     setLoading(true);
-    fetchCities(uf)
-      .then((c) => {
-        cache.set(uf, c);
-        if (alive) setCities(c);
-      })
-      .catch(() => alive && setCities([]))
-      .finally(() => alive && setLoading(false));
+    // a API pode estar reiniciando: tenta algumas vezes antes de avisar
+    const load = () =>
+      fetchCities(uf)
+        .then((c) => {
+          cache.set(uf, c);
+          if (!alive) return;
+          setCities(c);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (!alive) return;
+          if (tries < 2) timer = setTimeout(load, 2500 * ++tries);
+          else {
+            setCities([]);
+            setListErr(true);
+            setLoading(false);
+          }
+        });
+    void load();
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [uf]);
+  }, [uf, retry]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -69,7 +87,7 @@ export function PlacePicker() {
 
   const q = norm(text);
   const matches = useMemo(() => {
-    if (!q) return [];
+    if (!q) return cities.slice(0, 40); // sem texto, mostra as primeiras para sempre haver um menu
     const starts = cities.filter((c) => norm(c.nome).startsWith(q));
     const inside = cities.filter((c) => !norm(c.nome).startsWith(q) && norm(c.nome).includes(q));
     return [...starts, ...inside].slice(0, 8);
@@ -85,7 +103,15 @@ export function PlacePicker() {
 
   const save = () => {
     if (!uf) return setHint('Escolha o estado.');
-    if (text.trim() && !exact) return setHint('Escolha uma cidade da lista ou deixe em branco para ver o estado todo.');
+    // se a lista de cidades não carregou, aceita o nome digitado (a busca funciona do mesmo jeito)
+    if (listErr && text.trim()) {
+      setPlace({ uf, city: text.trim().replace(/s+/g, ' ').slice(0, 60) });
+      return closePicker();
+    }
+    if (text.trim() && !exact) {
+      setOpen(true);
+      return setHint('Toque numa cidade da lista abaixo do campo, ou apague o texto para ver o estado todo.');
+    }
     setPlace({ uf, city: exact?.nome });
     closePicker();
   };
@@ -129,7 +155,7 @@ export function PlacePicker() {
               id="place-city"
               type="text"
               role="combobox"
-              aria-expanded={open && matches.length > 0}
+              aria-expanded={open && !exact}
               aria-controls={listId}
               aria-autocomplete="list"
               autoComplete="off"
@@ -140,14 +166,25 @@ export function PlacePicker() {
               onFocus={() => setOpen(true)}
               onKeyDown={onInputKey}
             />
-            {open && matches.length > 0 && !exact && (
+            {open && uf && !exact && (
               <ul id={listId} role="listbox" className="combo-list">
+                {loading && <li className="combo-note" role="presentation">Carregando cidades de {uf}…</li>}
+                {!loading && listErr && (
+                  <li className="combo-note" role="presentation">
+                    Não consegui carregar a lista de cidades agora.{' '}
+                    <button type="button" onPointerDown={(e) => { e.preventDefault(); setRetry((r) => r + 1); }}>Tentar de novo</button>
+                    {text.trim() ? <span> Ou toque em Salvar para usar “{text.trim()}” mesmo assim.</span> : null}
+                  </li>
+                )}
+                {!loading && !listErr && matches.length === 0 && (
+                  <li className="combo-note" role="presentation">Nenhuma cidade de {uf} com “{text.trim()}”. Confira a grafia.</li>
+                )}
                 {matches.map((c, i) => (
                   <li
                     key={c.id}
                     role="option"
                     aria-selected={i === active}
-                    onMouseDown={(e) => { e.preventDefault(); choose(c); }}
+                    onPointerDown={(e) => { e.preventDefault(); choose(c); }}
                     onMouseEnter={() => setActive(i)}
                   >
                     {c.nome}

@@ -12,6 +12,16 @@ type Period = '1d' | '7d' | '30d';
 const DAYS = { '1d': 1, '7d': 7, '30d': 30 } as const;
 const LABEL = { '1d': 'últimas 24 horas', '7d': 'últimos 7 dias', '30d': 'últimos 30 dias' } as const;
 
+/** Bloco que falhou: avisa e oferece tentar de novo. */
+function Failed({ text, onRetry }: { text: string; onRetry: () => void }) {
+  return (
+    <div className="empty-box">
+      <p>{text}</p>
+      <button type="button" className="more-link" onClick={onRetry}>Tentar de novo</button>
+    </div>
+  );
+}
+
 // ── Notícias da região ────────────────────────────────────────────────
 
 function PlaceNews({ place, now }: { place: Place; now: number }) {
@@ -81,7 +91,7 @@ function PlaceNews({ place, now }: { place: Place; now: number }) {
       {list.loading && !list.items.length ? (
         <Skeleton rows={6} />
       ) : list.error && !list.items.length ? (
-        <Empty text="Não consegui buscar as notícias agora. Tente de novo em instantes." />
+        <Failed text="Não consegui buscar as notícias agora." onRetry={list.reload} />
       ) : !list.items.length ? (
         <div className="empty-box">
           <p>{q ? 'Nada encontrado para essa busca neste período.' : 'Nenhuma notícia encontrada neste período.'}</p>
@@ -126,7 +136,7 @@ function WeatherCard({ place }: { place: Place }) {
   return (
     <div className="wx">
       <h3 className="sub-head">Clima <span>{w.data?.place.name ?? place.city ?? 'capital'}</span></h3>
-      {w.loading && !w.data ? <Skeleton rows={3} /> : !w.data ? <Empty text="Clima indisponível agora." /> : (
+      {w.loading && !w.data ? <Skeleton rows={3} /> : !w.data ? <Failed text="Clima indisponível agora." onRetry={w.reload} /> : (
         <>
           <div className="wx-now">
             <div className="wx-temp num">{w.data.now.temp}°</div>
@@ -157,7 +167,7 @@ function AlertsCard({ place }: { place: Place }) {
   return (
     <div className="alerts">
       <h3 className="sub-head">Alertas em {place.uf} <span>INMET · {a.data ? `${a.data.total} ativos` : ''}</span></h3>
-      {a.loading && !a.data ? <Skeleton rows={3} /> : !a.data ? <Empty text="Alertas indisponíveis agora." /> : a.data.total === 0 ? (
+      {a.loading && !a.data ? <Skeleton rows={3} /> : !a.data ? <Failed text="Alertas indisponíveis agora." onRetry={a.reload} /> : a.data.total === 0 ? (
         <p className="empty">Nenhum alerta meteorológico ativo para {ufName(place.uf)} hoje.</p>
       ) : (
         <ul className="alert-list">
@@ -202,7 +212,7 @@ function BancadaBlock({ place }: { place: Place }) {
   return (
     <div className="bancada">
       <h3 className="sub-head">Bancada de {ufName(place.uf)} no Congresso <span>quem te representa em Brasília</span></h3>
-      {b.loading && !b.data ? <Skeleton rows={4} /> : !b.data ? <Empty text="Bancada indisponível agora." /> : (
+      {b.loading && !b.data ? <Skeleton rows={4} /> : !b.data ? <Failed text="Bancada indisponível agora." onRetry={b.reload} /> : (
         <div className="bancada-grid">
           <div>
             <h4 className="mini-head">Senadores <b>{b.data.senadores.length}</b></h4>
