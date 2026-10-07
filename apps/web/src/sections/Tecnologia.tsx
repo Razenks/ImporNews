@@ -15,7 +15,7 @@ export function Tecnologia({ bundle, now }: { bundle: Bundle | null; now: number
   const [tab, setTab] = useState<Tab>('tech-br');
   return (
     <section id="tecnologia" className="section" aria-labelledby="tecnologia-t" data-sec="tecnologia">
-      <SectionHead id="tecnologia" n="06" title="Tecnologia" env={bundle?.tech} now={now}>
+      <SectionHead id="tecnologia" n="05" title="Tecnologia" env={bundle?.tech} now={now}>
         <Segmented<Tab>
           label="Origem"
           value={tab}

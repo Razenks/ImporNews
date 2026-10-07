@@ -20,6 +20,21 @@ Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado
 
 **Plano B das cotações:** a AwesomeAPI limita por IP (erro 429) e servidores de hospedagem compartilham IPs. Se ela recusar, a API usa automaticamente o câmbio do BCE (Frankfurter) e a cripto da Coinbase, e volta para a principal depois de alguns minutos. Opcional: crie uma chave gratuita na AwesomeAPI e coloque em `AWESOMEAPI_TOKEN` na Railway para ter mais limite.
 
+## Minha região
+
+Em **Minha região** (ou no botão da região, no topo/menu) a pessoa escolhe o **estado** e, se quiser, a **cidade** (qualquer uma das 5.570, lista do IBGE). A escolha fica salva só naquele aparelho (sem login). A partir daí:
+
+- **Notícias da cidade ou do estado**, de 24 h a 30 dias, com busca, filtro por veículo e escolha entre "Cidade" e "Estado". Fontes: Google Notícias (que reúne os veículos locais, prefeituras e câmaras) + feeds próprios de veículos locais (hoje MS: Campo Grande News e Primeira Página; para incluir outros, edite `DIRECT` em `apps/api/src/sources/local.ts`). O link abre a matéria no site do veículo.
+- **Clima da cidade** (hoje + 3 dias) e **alertas do INMET** do estado.
+- **Bancada federal do estado**: senadores e deputados, com link para o perfil de cada um.
+
+As buscas de região são feitas na hora (com cache de 10 min no servidor), então não ocupam o banco.
+
+## Busca e links
+
+- **Buscar no site** (botão no topo/menu, tecla `/` ou `Ctrl+K`): acha notícias dos últimos 30 dias (todas as seções), projetos de lei da Câmara e do Senado e leva direto a uma seção ("dólar" → Mercado, "nvidia" → Tecnologia…).
+- **Congresso**: busca de projetos de lei e **link em todos os itens** (votações, projetos, matérias, agenda), abrindo a página oficial da Câmara ou do Senado.
+
 ## Notícias: 24 h, 7 dias e 30 dias
 
 As notícias coletadas ficam guardadas no Neon (tabela `articles`). Em **Tecnologia** e **Notícias** dá para escolher **24 h · 7 dias · 30 dias**, buscar por texto e filtrar por veículo.

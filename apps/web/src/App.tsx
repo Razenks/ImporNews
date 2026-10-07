@@ -3,22 +3,28 @@ import { MotionToggle, Splash, Ticker } from './components';
 import { clock } from './format';
 import { useBundle, useLiveQuotes, useNow } from './hooks';
 import { useReveal, useScrollProgress } from './motion';
+import { PlaceChip, PlacePicker } from './PlacePicker';
+import { SearchPalette } from './SearchPalette';
 import { Clima } from './sections/Clima';
 import { Eleicoes } from './sections/Eleicoes';
 import { Governo } from './sections/Governo';
 import { Mercado } from './sections/Mercado';
 import { Mundo } from './sections/Mundo';
 import { Noticias } from './sections/Noticias';
+import { Regiao } from './sections/Regiao';
 import { Tecnologia } from './sections/Tecnologia';
 
+/**
+ * Cada item do menu é um "painel". No celular mostra um por vez; no computador, todos juntos.
+ * `anchor` é a seção para onde rolar no computador; `keywords` alimenta a busca "Ir para".
+ */
 const SECTIONS = [
-  { id: 'mercado', n: '01', label: 'Mercado' },
-  { id: 'governo', n: '02', label: 'Congresso' },
-  { id: 'eleicoes', n: '03', label: 'Eleições' },
-  { id: 'clima', n: '04', label: 'Clima' },
-  { id: 'mundo', n: '05', label: 'Mundo' },
-  { id: 'tecnologia', n: '06', label: 'Tecnologia', short: 'Tech' },
-  { id: 'noticias', n: '07', label: 'Notícias' },
+  { id: 'mercado', n: '01', label: 'Mercado', anchor: 'mercado', keywords: 'dólar dolar euro libra bitcoin ethereum selic ipca câmbio cotação juros inflação' },
+  { id: 'politica', n: '02', label: 'Política', anchor: 'governo', keywords: 'congresso câmara camara senado deputados senadores eleições eleicao votação projeto lei pec 6x1 tse' },
+  { id: 'regiao', n: '03', label: 'Minha região', short: 'Região', anchor: 'regiao', keywords: 'cidade estado região local clima tempo previsão chuva alerta bancada notícias daqui campo grande' },
+  { id: 'mundo', n: '04', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
+  { id: 'tecnologia', n: '05', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
+  { id: 'noticias', n: '06', label: 'Notícias', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
 ] as const;
 
 type Id = (typeof SECTIONS)[number]['id'];
@@ -40,20 +46,37 @@ function Brand() {
   );
 }
 
+function SearchButton({ onClick, className = '' }: { onClick: () => void; className?: string }) {
+  return (
+    <button type="button" className={`search-btn ${className}`} onClick={onClick} aria-label="Buscar no site" aria-haspopup="dialog">
+      <svg viewBox="0 0 14 14" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="6" cy="6" r="4.5" />
+        <path d="M9.5 9.5L13 13" />
+      </svg>
+      <span className="search-btn-t">Buscar no site</span>
+      <kbd aria-hidden="true">/</kbd>
+    </button>
+  );
+}
+
 export default function App() {
   const now = useNow(1000);
   const { bundle, error } = useBundle();
   const { quotes, online, at } = useLiveQuotes(bundle?.quotes.data);
   const [tab, setTab] = useState<Id>(loadTab);
+  const [searching, setSearching] = useState(false);
+  const [searchSeed, setSearchSeed] = useState('');
   const progress = useRef<HTMLDivElement>(null);
   useReveal();
   useScrollProgress(progress);
 
-  const go = (id: Id) => {
-    setTab(id);
-    try { localStorage.setItem(KEY, id); } catch { /* ok */ }
+  const go = (id: string) => {
+    const s = SECTIONS.find((x) => x.id === id);
+    if (!s) return;
+    setTab(s.id);
+    try { localStorage.setItem(KEY, s.id); } catch { /* ok */ }
     if (window.matchMedia('(min-width: 1100px)').matches) {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById(s.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
       window.scrollTo({ top: 0 });
     }
@@ -65,7 +88,8 @@ export default function App() {
     const obs = new IntersectionObserver(
       (entries) => {
         const hit = entries.find((e) => e.isIntersecting);
-        if (hit) setTab((hit.target as HTMLElement).dataset.sec as Id);
+        const id = (hit?.target as HTMLElement | undefined)?.dataset.sec;
+        if (id && SECTIONS.some((s) => s.id === id)) setTab(id as Id);
       },
       { rootMargin: '-25% 0px -65% 0px' },
     );
@@ -73,10 +97,41 @@ export default function App() {
     return () => obs.disconnect();
   }, [bundle !== null]);
 
+  // atalhos: "/" ou Ctrl/Cmd+K abrem a busca
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setSearching(true);
+      } else if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setSearching(true);
+      }
+    };
+    // outras telas podem pedir a busca geral já com um termo ("Buscar notícias sobre …")
+    const onSeed = (e: Event) => {
+      setSearchSeed(String((e as CustomEvent).detail ?? ''));
+      setSearching(true);
+    };
+    addEventListener('keydown', onKey);
+    addEventListener('impornews:search', onSeed);
+    return () => {
+      removeEventListener('keydown', onKey);
+      removeEventListener('impornews:search', onSeed);
+    };
+  }, []);
+
+  const openSearch = () => {
+    setSearchSeed('');
+    setSearching(true);
+  };
+
   const status = online ? (
-    <span className="live on"><i />ao vivo <time>{at ? clock(at) : '--:--:--'}</time></span>
+    <span className="live on"><i /><span className="live-t">ao vivo <time>{at ? clock(at) : '--:--:--'}</time></span></span>
   ) : (
-    <span className="live"><i />{bundle ? 'reconectando…' : 'conectando…'}</span>
+    <span className="live"><i /><span className="live-t">{bundle ? 'reconectando…' : 'conectando…'}</span></span>
   );
 
   const nav = (cls: string) => (
@@ -109,6 +164,10 @@ export default function App() {
       <div className="progress" ref={progress} aria-hidden="true" />
       <aside className="rail">
         <Brand />
+        <div className="rail-tools">
+          <SearchButton onClick={openSearch} />
+          <PlaceChip className="wide" />
+        </div>
         {nav('railnav')}
         <div className="rail-foot">
           {status}
@@ -120,7 +179,11 @@ export default function App() {
       <div className="main">
         <header className="topbar">
           <Brand />
-          {status}
+          <div className="topbar-actions">
+            <SearchButton className="icon" onClick={openSearch} />
+            <PlaceChip className="compact" />
+            {status}
+          </div>
         </header>
         <Ticker quotes={quotes} />
 
@@ -130,9 +193,14 @@ export default function App() {
 
         <main>
           <div className="pane" data-active={tab === 'mercado'}><Mercado bundle={bundle} quotes={quotes} now={now} /></div>
-          <div className="pane" data-active={tab === 'governo'}><Governo bundle={bundle} now={now} /></div>
-          <div className="pane" data-active={tab === 'eleicoes'}><Eleicoes bundle={bundle} now={now} /></div>
-          <div className="pane" data-active={tab === 'clima'}><Clima bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'politica'}>
+            <Governo bundle={bundle} now={now} />
+            <Eleicoes bundle={bundle} now={now} />
+          </div>
+          <div className="pane" data-active={tab === 'regiao'}>
+            <Regiao bundle={bundle} now={now} />
+            <Clima bundle={bundle} now={now} />
+          </div>
           <div className="pane" data-active={tab === 'mundo'}><Mundo bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'tecnologia'}><Tecnologia bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
@@ -140,8 +208,8 @@ export default function App() {
 
         <footer className="foot">
           <p>
-            Fontes: Banco Central · AwesomeAPI · CoinGecko · Câmara dos Deputados · Senado Federal · IBGE ·
-            Agência Brasil · ONU News · OMS · INMET · Open-Meteo
+            Fontes: Banco Central · AwesomeAPI · BCE · Coinbase · Câmara dos Deputados · Senado Federal · IBGE · INMET ·
+            Open-Meteo · Agência Brasil · ONU News · OMS · Google Notícias · veículos de tecnologia e newsrooms oficiais
           </p>
           <p>Cotações e indicadores têm caráter informativo.</p>
           <MotionToggle />
@@ -149,6 +217,15 @@ export default function App() {
       </div>
 
       {nav('tabbar')}
+
+      <PlacePicker />
+      <SearchPalette
+        open={searching}
+        onClose={() => setSearching(false)}
+        onGo={go}
+        initial={searchSeed}
+        jumps={SECTIONS.map((s) => ({ id: s.id, n: s.n, label: s.label, keywords: s.keywords }))}
+      />
     </div>
   );
 }

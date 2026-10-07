@@ -1,4 +1,5 @@
 import { getJson, plain } from '../http.js';
+import { ufFromName } from '../ufs.js';
 
 const CITIES = [
   { name: 'São Paulo', uf: 'SP', lat: -23.55, lon: -46.63 },
@@ -18,6 +19,8 @@ const WMO: Record<number, string> = {
   71: 'Neve fraca', 73: 'Neve', 75: 'Neve forte', 80: 'Pancadas fracas', 81: 'Pancadas de chuva',
   82: 'Pancadas fortes', 95: 'Trovoadas', 96: 'Trovoadas com granizo', 99: 'Trovoadas com granizo',
 };
+
+export const wmoLabel = (code: number): string => WMO[code] ?? '—';
 
 export interface CityWeather {
   name: string;
@@ -68,6 +71,7 @@ export interface Alert {
   rank: number;
   cor: string;
   estados: string;
+  ufs: string[]; // siglas dos estados atingidos (para filtrar por região)
   inicio: string;
   fim: string;
   risco: string;
@@ -93,12 +97,13 @@ export async function fetchAlerts(): Promise<Alerts> {
       rank: RANK[a.severidade] ?? 0,
       cor: (a.aviso_cor as string) ?? '#999',
       estados: plain(a.estados, 90),
+      ufs: [...new Set(String(a.estados ?? '').split(',').map((s) => ufFromName(s)).filter((u): u is string => !!u))],
       inicio: String(a.inicio ?? ''),
       fim: String(a.fim ?? ''),
       risco: plain(a.riscos?.[0], 200),
     }))
     .sort((a, b) => b.rank - a.rank)
-    .slice(0, 12);
+    .slice(0, 60);
 
   return { total: hoje.length, porSeveridade, avisos };
 }

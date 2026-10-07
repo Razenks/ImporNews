@@ -171,3 +171,98 @@ export function useDebounced<T>(value: T, ms = 350): T {
   }, [value, ms]);
   return v;
 }
+
+/** Carrega algo uma vez (e de novo quando `deps` mudam). `enabled=false` não faz nada. */
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = true) {
+  const [state, setState] = useState<{ data: T | null; loading: boolean; error: boolean }>({ data: null, loading: enabled, error: false });
+  useEffect(() => {
+    if (!enabled) {
+      setState({ data: null, loading: false, error: false });
+      return;
+    }
+    let alive = true;
+    setState((s) => ({ data: s.data, loading: true, error: false }));
+    fn()
+      .then((data) => alive && setState({ data, loading: false, error: false }))
+      .catch(() => alive && setState((s) => ({ data: s.data, loading: false, error: true })));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, enabled]);
+  return state;
+}
+
+/**
+ * Lista paginada ("mostrar mais") com atualização silenciosa: de tempos em tempos busca a
+ * primeira página e, se houver algo mais novo que o topo, avisa em `freshCount`.
+ */
+export function usePagedList<T, X extends { items: T[]; total: number }>(
+  page: (offset: number, limit: number) => Promise<X>,
+  keyOf: (t: T) => string,
+  dateOf: (t: T) => string,
+  deps: unknown[],
+  enabled = true,
+  refreshMs = 120_000,
+) {
+  const PAGE = 20;
+  const [s, setS] = useState<{ items: T[]; extra: Omit<X, 'items'> | null; loading: boolean; error: boolean }>({
+    items: [], extra: null, loading: enabled, error: false,
+  });
+  const [fresh, setFresh] = useState<X | null>(null);
+  const [more, setMore] = useState(false);
+  const ref = useRef(s.items);
+  ref.current = s.items;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    setS((x) => ({ ...x, loading: true, error: false }));
+    setFresh(null);
+    pageRef.current(0, PAGE)
+      .then(({ items, ...extra }) => alive && setS({ items, extra: extra as Omit<X, 'items'>, loading: false, error: false }))
+      .catch(() => alive && setS((x) => ({ ...x, items: [], loading: false, error: true })));
+
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      pageRef.current(0, PAGE)
+        .then((p) => {
+          if (!alive) return;
+          const have = new Set(ref.current.map(keyOf));
+          const top = ref.current[0] ? dateOf(ref.current[0]) : '';
+          setFresh(p.items.some((i) => !have.has(keyOf(i)) && dateOf(i) > top) ? p : null);
+        })
+        .catch(() => {});
+    }, refreshMs);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, enabled]);
+
+  const loadMore = () => {
+    setMore(true);
+    pageRef.current(ref.current.length, PAGE)
+      .then(({ items, ...extra }) =>
+        setS((x) => ({
+          ...x,
+          items: [...x.items, ...items.filter((i) => !x.items.some((y) => keyOf(y) === keyOf(i)))],
+          extra: extra as Omit<X, 'items'>,
+        })),
+      )
+      .finally(() => setMore(false));
+  };
+
+  const applyFresh = () => {
+    if (!fresh) return;
+    const { items, ...extra } = fresh;
+    setS((x) => ({ ...x, items, extra: extra as Omit<X, 'items'> }));
+    setFresh(null);
+  };
+
+  const freshCount = fresh ? fresh.items.filter((i) => !s.items.some((y) => keyOf(y) === keyOf(i))).length : 0;
+  return { ...s, loadingMore: more, loadMore, freshCount, applyFresh };
+}

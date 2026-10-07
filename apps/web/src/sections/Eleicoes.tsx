@@ -20,8 +20,8 @@ export function Eleicoes({ bundle, now }: { bundle: Bundle | null; now: number }
   const news = (bundle?.agenciabrasil.data ?? []).filter((a) => TOPIC.test(a.title)).slice(0, 5);
 
   return (
-    <section id="eleicoes" className="section" aria-labelledby="eleicoes-t" data-sec="eleicoes">
-      <SectionHead id="eleicoes" n="03" title="Eleições 2026" env={bundle?.agenciabrasil} now={now} />
+    <section id="eleicoes" className="section" aria-labelledby="eleicoes-t" data-sec="politica">
+      <SectionHead id="eleicoes" n="·" title="Eleições 2026" env={bundle?.agenciabrasil} now={now} />
 
       <div className="elec">
         <div className="count">

@@ -31,9 +31,11 @@ const parser = new XMLParser({
   processEntities: { enabled: true, maxTotalExpansions: 1_000_000, maxExpandedLength: 10_000_000 },
 });
 
-const arr = <T>(x: T | T[] | undefined | null): T[] => (Array.isArray(x) ? x : x == null ? [] : [x]);
+export const xmlParse = (text: string): any => parser.parse(text);
 
-const str = (v: any): string =>
+export const arr = <T>(x: T | T[] | undefined | null): T[] => (Array.isArray(x) ? x : x == null ? [] : [x]);
+
+export const str = (v: any): string =>
   v == null ? '' : typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'object' ? str(v['#text']) : '';
 
 const TRACKER = /ebc\.(png|gif)|pixel|feedburner|1x1|spacer|blank\.gif|doubleclick/i;

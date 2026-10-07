@@ -46,3 +46,9 @@ Cada módulo falha isoladamente: se uma fonte cair, serve o último dado em cach
 - Retenção: 30 dias de consulta; rotina agendada apaga o que passa de 31 dias (ao iniciar e a cada 6 h). Cotações: 8 dias.
 - Coleta de ~34 fontes a cada 10 min; backfill de 30 dias na partida (idempotente).
 - Seções: 06 Tecnologia (Brasil / Mundo / Empresas), 07 Notícias (Agência Brasil + IBGE), ambas com período, busca, filtro por veículo, aviso de novas e "mostrar mais".
+
+## Adendo — região, busca e links (07/10/2026)
+- Navegação com 6 painéis: Mercado, Política (Congresso + Eleições), Minha região (+ capitais/alertas do país), Mundo, Tecnologia, Notícias.
+- "Minha região": UF + cidade (IBGE) no `localStorage`. Endpoints `/api/local/{news,cidades,clima,bancada,alertas}`; notícias via Google Notícias RSS + feeds locais, com cache em memória (10 min), sem gravar no banco.
+- Busca geral `/api/search` (arquivo de 30 dias + projetos da Câmara e do Senado) e `/api/congresso/busca`.
+- Congresso: links em votações (sessão/evento ou matéria), projetos, matérias do Senado e agenda.

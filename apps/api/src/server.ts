@@ -7,6 +7,11 @@ import { fetchDaily, fetchIndicators, fetchQuotes, type Quote } from './sources/
 import { fetchCamara, fetchSenado } from './sources/gov.js';
 import { backfillIbge, fetchAgenciaBrasil, fetchIbge, fetchOms, fetchOnu, toRows } from './sources/news.js';
 import { backfillTech, collectTech } from './sources/tech.js';
+import { searchProposicoes } from './sources/gov.js';
+import { bancada, cities, localNews, localWeather } from './sources/local.js';
+import type { Alerts } from './sources/weather.js';
+import { isUf } from './ufs.js';
+import { memo } from './memo.js';
 import { fetchAlerts, fetchWeather } from './sources/weather.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -93,6 +98,95 @@ app.get<{ Querystring: { cat?: string; days?: string; group?: string; q?: string
     return page;
   },
 );
+
+// ── Minha região ─────────────────────────────────────────────────────
+type LocalQ = { uf?: string; city?: string; scope?: string; days?: string; q?: string; source?: string; limit?: string; offset?: string };
+
+app.get<{ Querystring: LocalQ }>('/api/local/news', async (req, reply) => {
+  const uf = req.query.uf?.toUpperCase();
+  if (!isUf(uf)) return reply.code(400).send({ error: 'estado inválido' });
+  const days = ([1, 7, 30] as const).find((d) => d === Number(req.query.days)) ?? 7;
+  const city = req.query.city?.trim().slice(0, 60) || undefined;
+  const scope = req.query.scope === 'state' || !city ? 'state' : 'city';
+  try {
+    const out = await localNews(
+      { uf, city, scope, days, q: req.query.q?.trim().slice(0, 60) || undefined },
+      { source: req.query.source?.slice(0, 60) || undefined, limit: int(req.query.limit, 20, 1, 50), offset: int(req.query.offset, 0, 0, 200) },
+    );
+    reply.header('cache-control', 'public, max-age=60');
+    return out;
+  } catch (err) {
+    return reply.code(502).send({ error: err instanceof Error ? err.message : 'fontes locais indisponíveis' });
+  }
+});
+
+app.get<{ Querystring: LocalQ }>('/api/local/cidades', async (req, reply) => {
+  const uf = req.query.uf?.toUpperCase();
+  if (!isUf(uf)) return reply.code(400).send({ error: 'estado inválido' });
+  try {
+    reply.header('cache-control', 'public, max-age=86400');
+    return await cities(uf);
+  } catch {
+    return reply.code(502).send({ error: 'lista de cidades indisponível' });
+  }
+});
+
+app.get<{ Querystring: LocalQ }>('/api/local/clima', async (req, reply) => {
+  const uf = req.query.uf?.toUpperCase();
+  if (!isUf(uf)) return reply.code(400).send({ error: 'estado inválido' });
+  try {
+    reply.header('cache-control', 'public, max-age=300');
+    return await localWeather(uf, req.query.city);
+  } catch (err) {
+    return reply.code(502).send({ error: err instanceof Error ? err.message : 'clima indisponível' });
+  }
+});
+
+app.get<{ Querystring: LocalQ }>('/api/local/bancada', async (req, reply) => {
+  const uf = req.query.uf?.toUpperCase();
+  if (!isUf(uf)) return reply.code(400).send({ error: 'estado inválido' });
+  try {
+    reply.header('cache-control', 'public, max-age=3600');
+    return await bancada(uf);
+  } catch {
+    return reply.code(502).send({ error: 'bancada indisponível' });
+  }
+});
+
+app.get<{ Querystring: LocalQ }>('/api/local/alertas', async (req, reply) => {
+  const uf = req.query.uf?.toUpperCase();
+  if (!isUf(uf)) return reply.code(400).send({ error: 'estado inválido' });
+  const all = (read('alerts')?.data as Alerts | null)?.avisos ?? [];
+  const avisos = all.filter((a) => a.ufs.includes(uf));
+  return { total: avisos.length, avisos: avisos.slice(0, 12) };
+});
+
+// ── Busca ────────────────────────────────────────────────────────────
+app.get<{ Querystring: { q?: string } }>('/api/congresso/busca', async (req, reply) => {
+  const q = (req.query.q ?? '').trim().slice(0, 80);
+  if (q.length < 2) return [];
+  try {
+    return await memo(`prop|${q.toLowerCase()}`, 60_000, () => searchProposicoes(q, 12));
+  } catch {
+    return reply.code(502).send({ error: 'busca na Câmara indisponível' });
+  }
+});
+
+app.get<{ Querystring: { q?: string } }>('/api/search', async (req) => {
+  const q = (req.query.q ?? '').trim().slice(0, 80);
+  if (q.length < 2) return { news: [], newsTotal: 0, proposicoes: [] };
+  return memo(`search|${q.toLowerCase()}`, 60_000, async () => {
+    const [news, props] = await Promise.allSettled([
+      queryArticles({ cats: [...CATS], days: 30, q, limit: 8, offset: 0 }),
+      searchProposicoes(q, 6),
+    ]);
+    return {
+      news: news.status === 'fulfilled' ? news.value.items : [],
+      newsTotal: news.status === 'fulfilled' ? news.value.total : 0,
+      proposicoes: props.status === 'fulfilled' ? props.value : [],
+    };
+  });
+});
 
 app.get<{ Params: { key: string } }>('/api/:key', async (req, reply) => {
   const entry = read(req.params.key);

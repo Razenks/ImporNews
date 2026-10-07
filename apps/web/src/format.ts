@@ -64,3 +64,7 @@ export function daysUntil(iso: string, now = Date.now()): number {
   const target = new Date(`${iso}T00:00:00-03:00`).getTime();
   return Math.ceil((target - now) / 86_400_000);
 }
+
+/** "qua 08" a partir de YYYY-MM-DD. */
+export const weekdayShort = (iso: string): string =>
+  new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit' }).format(new Date(`${iso}T12:00:00`)).replace('.', '');
