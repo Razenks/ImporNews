@@ -911,3 +911,6 @@ html[data-motion='off'] .ticker-set + .ticker-set { display: none; }
 .motion-toggle:hover { color: var(--t1); border-color: var(--t3); }
 .foot .motion-toggle { margin-top: 14px; }
 @media (min-width: 1100px) { .foot .motion-toggle { display: none; } }
+
+/* ao rolar até os itens novos de "Mostrar mais", deixa folga para a faixa de cotações fixa */
+.feed > li { scroll-margin-top: 72px; }

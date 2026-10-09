@@ -48,6 +48,13 @@ const REVEAL =
 function tag(): void {
   document.querySelectorAll<HTMLElement>(REVEAL).forEach((el) => {
     if (el.hasAttribute('data-r')) return;
+    // itens trazidos por "Mostrar mais" (a partir do 20º) aparecem na hora, sem esperar a rolagem
+    if (el.matches('.feed > li:nth-child(n+20)')) {
+      el.setAttribute('data-r', '');
+      el.setAttribute('data-in', '');
+      el.style.setProperty('--d', '0ms');
+      return;
+    }
     const sibs = el.parentElement ? [...el.parentElement.children].filter((c) => c.matches(REVEAL)) : [el];
     el.style.setProperty('--d', `${Math.min(sibs.indexOf(el), 8) * 70}ms`);
     el.setAttribute('data-r', '');
@@ -183,4 +190,15 @@ export function useCountUp<T extends HTMLElement>(target: number, ms = 1200): [n
   }, [target]);
 
   return [shown, ref];
+}
+
+/** Depois de "Mostrar mais": leva a tela ao primeiro item novo (eles entram abaixo do botão). */
+export function scrollToNew(list: HTMLElement | null, before: number): void {
+  if (!list) return;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const li = list.querySelectorAll(':scope > li')[before] as HTMLElement | undefined;
+      li?.scrollIntoView({ behavior: prefersReduced() ? 'auto' : 'smooth', block: 'start' });
+    }),
+  );
 }

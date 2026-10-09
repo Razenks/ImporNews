@@ -164,10 +164,11 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
     };
   }, [cat, days, group, q]);
 
-  const loadMore = () => {
+  const loadMore = (): Promise<void> => {
     setMore(true);
-    fetchArticles({ cat, days, group, q, limit: PAGE, offset: itemsRef.current.length })
+    return fetchArticles({ cat, days, group, q, limit: PAGE, offset: itemsRef.current.length })
       .then((p) => setState((s) => ({ ...s, items: [...s.items, ...p.items.filter((i) => !s.items.some((x) => x.url === i.url))], total: p.total })))
+      .catch(() => {})
       .finally(() => setMore(false));
   };
 
@@ -293,9 +294,9 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, enabled, tick]);
 
-  const loadMore = () => {
+  const loadMore = (): Promise<void> => {
     setMore(true);
-    pageRef.current(ref.current.length, PAGE)
+    return pageRef.current(ref.current.length, PAGE)
       .then(({ items, ...extra }) =>
         setS((x) => ({
           ...x,
@@ -303,6 +304,7 @@ export function usePagedList<T, X extends { items: T[]; total: number }>(
           extra: extra as Omit<X, 'items'>,
         })),
       )
+      .catch(() => {})
       .finally(() => setMore(false));
   };
 

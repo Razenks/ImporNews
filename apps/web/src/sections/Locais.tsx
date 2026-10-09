@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { fetchLocalNews, type Bundle, type LocalItem, type LocalNewsPage } from '../api';
 import { Ext, Item, Segmented, SectionHead, Skeleton } from '../components';
 import { ago } from '../format';
 import { useDebounced, usePagedList } from '../hooks';
+import { scrollToNew } from '../motion';
 import { ufName, usePlace, type Place } from '../place';
 import { Failed, Onboard } from './RegionBits';
 
@@ -39,6 +40,12 @@ export function LocalNews({ place, now, good = false }: { place: Place; now: num
     (i) => i.date,
     [place.uf, place.city, effScope, days, q, source, good, calm],
   );
+  const listRef = useRef<HTMLUListElement>(null);
+  const showMore = async () => {
+    const before = listRef.current?.children.length ?? 0;
+    await list.loadMore();
+    scrollToNew(listRef.current, before);
+  };
   const total = list.extra?.total ?? 0;
   const sources = list.extra?.sources ?? [];
   const where = effScope === 'city' && place.city ? place.city : ufName(place.uf);
@@ -121,7 +128,7 @@ export function LocalNews({ place, now, good = false }: { place: Place; now: num
           )}
         </div>
       ) : (
-        <ul className={`feed local-feed ${list.loading ? 'is-loading' : ''}`}>
+        <ul className={`feed local-feed ${list.loading ? 'is-loading' : ''}`} ref={listRef}>
           {list.items.map((x) => (
             <Item key={x.url}>
               <div className="feed-meta">
@@ -136,8 +143,8 @@ export function LocalNews({ place, now, good = false }: { place: Place; now: num
       )}
 
       {list.items.length > 0 && list.items.length < total && (
-        <button type="button" className="more-btn" disabled={list.loadingMore} onClick={list.loadMore}>
-          {list.loadingMore ? 'Carregando…' : `Mostrar mais · ${total - list.items.length} restantes`}
+        <button type="button" className="more-btn" disabled={list.loadingMore} onClick={showMore}>
+          {list.loadingMore ? 'Carregando…' : `Mostrar mais ${Math.min(20, total - list.items.length)} · ${total - list.items.length} restantes`}
         </button>
       )}
       <p className="source-note">

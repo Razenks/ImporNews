@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Arc } from '../api';
 import { Empty, Ext, Img, Item, Segmented, Skeleton } from '../components';
 import { ago, dayMonth } from '../format';
 import { useArticles, useDebounced } from '../hooks';
+import { scrollToNew } from '../motion';
 import { ArticleMore } from './Eleicoes';
 import { Failed } from './RegionBits';
 
@@ -52,6 +53,12 @@ export function ArchiveFeed({
   const q = useDebounced(text, 350).trim() || undefined;
   const days = DAYS[period];
   const a = useArticles({ cat, days, group, q });
+  const listRef = useRef<HTMLUListElement>(null);
+  const showMore = async () => {
+    const before = listRef.current?.children.length ?? 0;
+    await a.loadMore();
+    scrollToNew(listRef.current, before);
+  };
 
   const since = new Date(now - days * 86_400_000).toISOString();
   const partial = coverage && days >= 7 ? a.groups.filter((g) => g.oldest > since) : [];
@@ -131,7 +138,7 @@ export function ArchiveFeed({
       ) : (
         <div className={`${useLead ? 'news' : 'plain-list'} ${a.loading ? 'is-loading' : ''}`} key={`${period}|${group ?? ''}|${q ?? ''}`}>
           {useLead && <Entry a={first} now={now} lead />}
-          <ul className="feed news-list">
+          <ul className="feed news-list" ref={listRef}>
             {list.map((x) => (
               <Entry key={x.url} a={x} now={now} />
             ))}
@@ -140,8 +147,8 @@ export function ArchiveFeed({
       )}
 
       {a.items.length > 0 && a.items.length < a.total && (
-        <button type="button" className="more-btn" disabled={a.loadingMore} onClick={a.loadMore}>
-          {a.loadingMore ? 'Carregando…' : `Mostrar mais · ${a.total - a.items.length} restantes`}
+        <button type="button" className="more-btn" disabled={a.loadingMore} onClick={showMore}>
+          {a.loadingMore ? 'Carregando…' : `Mostrar mais ${Math.min(20, a.total - a.items.length)} · ${a.total - a.items.length} restantes`}
         </button>
       )}
       {dayMonth(a.items.at(-1)?.date) && a.items.length > 0 && a.items.length >= a.total && (
