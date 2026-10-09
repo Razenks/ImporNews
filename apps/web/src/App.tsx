@@ -13,6 +13,8 @@ import { Mundo } from './sections/Mundo';
 import { Noticias } from './sections/Noticias';
 import { Bancada } from './sections/Bancada';
 import { Boas } from './sections/Boas';
+import { Esportes } from './sections/Esportes';
+import { Games } from './sections/Games';
 import { Locais } from './sections/Locais';
 import { Tecnologia } from './sections/Tecnologia';
 import { Tempo } from './sections/Tempo';
@@ -28,8 +30,10 @@ const SECTIONS = [
   { id: 'local', n: '04', label: 'Notícias locais', short: 'Local', anchor: 'local', keywords: 'cidade estado região local notícias daqui bairro campo grande' },
   { id: 'mundo', n: '05', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
   { id: 'tecnologia', n: '06', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
-  { id: 'noticias', n: '07', label: 'Notícias', short: 'Brasil', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
-  { id: 'boas', n: '08', label: 'Notícias boas', short: 'Boas', anchor: 'boas', keywords: 'boas notícias positivas alegria solidariedade conquista esperança feliz' },
+  { id: 'games', n: '07', label: 'Games', anchor: 'games', keywords: 'jogos videogame playstation ps5 xbox nintendo switch pc steam mobile esports lol free fire valorant' },
+  { id: 'esportes', n: '08', label: 'Esportes', anchor: 'esportes', keywords: 'futebol f1 formula 1 motogp basquete nba vôlei volei tênis fisiculturismo artes marciais judô judo muay thai jiu-jitsu ufc mma boxe olimpíadas' },
+  { id: 'noticias', n: '09', label: 'Notícias', short: 'Brasil', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
+  { id: 'boas', n: '10', label: 'Notícias boas', short: 'Boas', anchor: 'boas', keywords: 'boas notícias positivas alegria solidariedade conquista esperança feliz' },
 ] as const;
 
 type Id = (typeof SECTIONS)[number]['id'];
@@ -101,6 +105,11 @@ export default function App() {
     document.querySelectorAll('.section').forEach((el) => obs.observe(el));
     return () => obs.disconnect();
   }, [bundle !== null]);
+
+  // na barra inferior (que rola no celular), mantém a aba atual visível
+  useEffect(() => {
+    document.querySelector('.tabbar [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [tab]);
 
   // atalhos: "/" ou Ctrl/Cmd+K abrem a busca
   useEffect(() => {
@@ -210,6 +219,8 @@ export default function App() {
           <div className="pane" data-active={tab === 'local'}><Locais bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'mundo'}><Mundo bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'tecnologia'}><Tecnologia bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'games'}><Games bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'esportes'}><Esportes bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'boas'}><Boas bundle={bundle} now={now} /></div>
         </main>

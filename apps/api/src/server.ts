@@ -74,13 +74,13 @@ app.get<{ Params: { symbol: string }; Querystring: { range?: string } }>(
 );
 
 // Arquivo de notícias: período de 1 a 30 dias, por categoria, veículo e texto.
-const CATS = new Set(['brasil', 'tech-br', 'tech-mundo', 'empresas', 'boas']);
+const CATS = new Set(['brasil', 'tech-br', 'tech-mundo', 'empresas', 'boas', 'esportes', 'games']);
 const int = (v: string | undefined, d: number, lo: number, hi: number): number => {
   const n = Number.parseInt(v ?? '', 10);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
 };
 
-app.get<{ Querystring: { cat?: string; days?: string; group?: string; q?: string; limit?: string; offset?: string } }>(
+app.get<{ Querystring: { cat?: string; days?: string; group?: string; tag?: string; region?: string; q?: string; limit?: string; offset?: string } }>(
   '/api/articles',
   async (req, reply) => {
     const cats = (req.query.cat ?? '').split(',').map((s) => s.trim()).filter((c) => CATS.has(c));
@@ -90,6 +90,8 @@ app.get<{ Querystring: { cat?: string; days?: string; group?: string; q?: string
       cats,
       days: int(req.query.days, 7, 1, 30),
       group: req.query.group?.trim().slice(0, 60) || undefined,
+      region: req.query.region === 'br' || req.query.region === 'mundo' ? req.query.region : undefined,
+      tags: (req.query.tag ?? '').split(',').map((t) => t.trim()).filter((t) => /^[a-z0-9-]{1,20}$/.test(t)).slice(0, 12),
       q: text || undefined,
       limit: int(req.query.limit, 20, 1, 50),
       offset: int(req.query.offset, 0, 0, 5000),

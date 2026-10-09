@@ -22,7 +22,7 @@ Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado
 
 ## Abas
 
-Mercado · Política · Tempo · Notícias locais · Mundo · Tecnologia · Notícias · Notícias boas
+Mercado · Política · Tempo · Notícias locais · Mundo · Tecnologia · Games · Esportes · Notícias · Notícias boas
 
 Quem escolhe a região (botão no topo/menu: **estado** e, se quiser, **cidade**, qualquer uma das 5.570 do IBGE) personaliza três abas. A escolha fica salva só naquele aparelho, sem login.
 
@@ -31,6 +31,14 @@ Quem escolhe a região (botão no topo/menu: **estado** e, se quiser, **cidade**
 - **Política → Sua bancada**: deputados e senadores do estado, com link para o perfil de cada um.
 
 As buscas de região são feitas na hora (cache de 10 min no servidor), sem ocupar o banco.
+
+## Games e Esportes
+
+**Games** (aba 07): IGN Brasil, Adrenaline, Meups, Critical Hits, PSX Brasil, Nintendo Blast, Mais Esports e GameVicio (Brasil); IGN, GameSpot, Eurogamer, PC Gamer, Kotaku, Polygon, Rock Paper Shotgun, VGC, GamesRadar, Destructoid, Dexerto, Nintendo Life, Push Square, PlayStation Blog e Xbox Wire (mundo), mais uma busca no Google Notícias. Filtro por plataforma: PlayStation, Xbox, Nintendo, PC, Mobile, eSports.
+
+**Esportes** (aba 08): ge, ESPN Brasil, Gazeta Esportiva, Folha, Placar, Trivela e Motorsport.com Brasil (Brasil); BBC Sport, ESPN, CBS Sports, Motorsport.com, Autosport, Crash.net e The Race (mundo), mais buscas por modalidade no Google Notícias (em português e, para as lutas, vôlei e olímpicos, em inglês). Filtro por modalidade: futebol, F1, MotoGP, basquete, vôlei, tênis, fisiculturismo, **artes marciais** (com submenu: MMA/UFC, boxe, judô, muay thai, jiu-jitsu, outras lutas) e olímpicos.
+
+Em Esportes, Games e Notícias boas há também o filtro **Tudo · Brasil · Mundo**, que separa veículos brasileiros dos internacionais. A modalidade/plataforma de cada notícia vem do feed (quando é de uma só) ou é descoberta por palavras no título (`apps/api/src/sports.ts` e `games.ts`; dá para ajustar as listas). A lista de veículos mostra só os 12 mais ativos; os demais aparecem pela busca.
 
 ## Notícias boas
 

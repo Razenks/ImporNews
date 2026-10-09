@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { Row } from './sources/feeds.js';
+import { regionOf, type Row } from './sources/feeds.js';
 import { isBad, isGood } from './mood.js';
 
 export interface Point { t: number; v: number }
@@ -40,7 +40,16 @@ export async function initDb(): Promise<void> {
       -- notícias boas: marcadas na gravação (ver mood.ts)
       alter table articles add column if not exists good boolean not null default false;
       create index if not exists articles_good_pub on articles (published_at desc) where good;
+
+      -- esportes: modalidade de cada notícia (futebol, f1, motogp…)
+      alter table articles add column if not exists tag text;
+
+      -- veículo do Brasil ('br') ou do mundo ('mundo')
+      alter table articles add column if not exists region text;
+      create index if not exists articles_region_pub on articles (region, published_at desc);
+      create index if not exists articles_cat_tag_pub on articles (cat, tag, published_at desc);
     `);
+    await backfillRegion();
     await markGoodBackfill();
     console.log('[db] Neon conectado');
   } catch (err) {
@@ -115,9 +124,27 @@ export async function purgeOld(): Promise<{ articles: number; quotes: number }> 
 
 /** Fontes de "boas notícias" entram como boas, salvo se a manchete for pesada; as demais passam pelo filtro. */
 // notícias de produto/empresa de tecnologia não contam como "boas notícias"
-const TECH_CATS = new Set(['tech-br', 'tech-mundo', 'empresas']);
+const TECH_CATS = new Set(['tech-br', 'tech-mundo', 'empresas', 'esportes', 'games']);
 const isGoodRow = (r: Row): boolean =>
   TECH_CATS.has(r.cat) ? false : r.cat === 'boas' ? !isBad(r.title, r.summary) : isGood(r.title, r.summary);
+
+/** Notícias guardadas antes da coluna "region" existir: preenche pela categoria e pela fonte. */
+async function backfillRegion(): Promise<void> {
+  if (!pool) return;
+  const r = await pool.query(
+    `update articles set region = case
+        when cat in ('brasil', 'tech-br') then 'br'
+        when cat = 'boas' and (source = 'Só Notícia Boa' or url like 'https://news.google.com/%') then 'br'
+        else 'mundo' end
+      where region is null`,
+  );
+  if (r.rowCount) console.log(`[db] região preenchida em ${r.rowCount} notícias`);
+  // luta de entretenimento (WWE) não é arte marcial: tira o que entrou antes de a regra existir
+  await pool.query(
+    `delete from articles where cat = 'esportes' and tag in ('lutas', 'mma')
+       and title ~* '(wwe|wrestl|ladder match|smackdown|wrestlemania|royal rumble)'`,
+  );
+}
 
 /** Recalcula o selo "boa" de tudo o que está guardado (a regra pode ter mudado). Roda ao iniciar. */
 async function markGoodBackfill(): Promise<void> {
@@ -163,18 +190,22 @@ export async function ingest(rows: Row[]): Promise<number> {
     for (let i = 0; i < uniq.length; i += 400) {
       const b = uniq.slice(i, i + 400);
       const { rows: res } = await pool.query(
-        `insert into articles (url, source, grp, cat, title, summary, image, published_at, good)
-         select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::boolean[])
+        `insert into articles (url, source, grp, cat, title, summary, image, published_at, good, tag, region)
+         select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::boolean[], $10::text[], $11::text[])
          on conflict (url) do update
             set title = excluded.title,
                 summary = case when excluded.summary <> '' then excluded.summary else articles.summary end,
                 image = coalesce(articles.image, excluded.image),
-                good = excluded.good
+                good = excluded.good,
+                tag = coalesce(excluded.tag, articles.tag),
+                region = coalesce(excluded.region, articles.region)
          returning (xmax = 0) as inserted`,
         [
           b.map((r) => r.url), b.map((r) => r.source), b.map((r) => r.grp), b.map((r) => r.cat),
           b.map((r) => r.title), b.map((r) => r.summary), b.map((r) => r.image), b.map((r) => r.date),
           b.map(isGoodRow),
+          b.map((r) => r.tag ?? null),
+          b.map((r) => r.region ?? regionOf(r.cat)),
         ],
       );
       added += res.filter((x) => x.inserted).length;
@@ -189,6 +220,10 @@ export interface ArticleQuery {
   cats: string[];
   days: number;
   group?: string;
+  /** modalidades (esportes); várias = "qualquer uma destas" */
+  tags?: string[];
+  /** 'br' ou 'mundo' */
+  region?: string;
   q?: string;
   limit: number;
   offset: number;
@@ -204,6 +239,8 @@ export interface ArticlePage {
   items: (Omit<Row, 'date'> & { date: string })[];
   total: number;
   groups: ArticleGroup[];
+  /** quantas notícias há por modalidade no período (só categorias com modalidade) */
+  tagCounts: { tag: string; n: number }[];
 }
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => '\\' + c);
@@ -222,11 +259,19 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
         params.push(q.group);
         where += ` and grp = $${params.length}`;
       }
+      if (q.region) {
+        params.push(q.region);
+        where += ` and region = $${params.length}`;
+      }
+      if (q.tags?.length) {
+        params.push(q.tags);
+        where += ` and tag = any($${params.length}::text[])`;
+      }
       if (q.q) {
         params.push(`%${likeEscape(q.q)}%`);
         where += ` and (title ilike $${params.length} or summary ilike $${params.length})`;
       }
-      const [items, total, groups] = await Promise.all([
+      const [items, total, groups, tagRows] = await Promise.all([
         pool.query(
           `select url, source, grp, cat, title, summary, image, published_at
              from articles where ${where}
@@ -242,6 +287,15 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
             group by grp order by n desc, grp`,
           [q.cats, q.days],
         ),
+        goodOnly
+          ? Promise.resolve({ rows: [] as { tag: string; n: number }[] })
+          : pool.query(
+              `select tag, count(*)::int as n from articles
+                where cat = any($1::text[]) and tag is not null
+                  and published_at > now() - ($2::int * interval '1 day')
+                group by tag order by n desc`,
+              [q.cats, q.days],
+            ),
       ]);
       return {
         items: items.rows.map((r) => ({
@@ -250,6 +304,7 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
         })),
         total: total.rows[0].n,
         groups: groups.rows.map((g) => ({ grp: g.grp, n: g.n, oldest: new Date(g.oldest).toISOString() })),
+        tagCounts: tagRows.rows.map((t) => ({ tag: t.tag, n: t.n })),
       };
     } catch (err) {
       console.warn('[db] falha ao consultar notícias:', err instanceof Error ? err.message : err);
@@ -262,6 +317,8 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
   const inPeriod = all.filter((r) => Date.parse(r.date) > since);
   const filtered = inPeriod
     .filter((r) => !q.group || r.grp === q.group)
+    .filter((r) => !q.tags?.length || (r.tag !== undefined && q.tags.includes(r.tag)))
+    .filter((r) => !q.region || (r.region ?? regionOf(r.cat)) === q.region)
     .filter((r) => !needle || r.title.toLowerCase().includes(needle) || r.summary.toLowerCase().includes(needle))
     .sort((a, b) => b.date.localeCompare(a.date));
   const g = new Map<string, ArticleGroup>();
@@ -275,5 +332,8 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
     items: filtered.slice(q.offset, q.offset + q.limit),
     total: filtered.length,
     groups: [...g.values()].sort((a, b) => b.n - a.n || a.grp.localeCompare(b.grp)),
+    tagCounts: [...inPeriod.reduce((m, r) => (r.tag ? m.set(r.tag, (m.get(r.tag) ?? 0) + 1) : m), new Map<string, number>())]
+      .map(([tag, n]) => ({ tag, n }))
+      .sort((a, b) => b.n - a.n),
   };
 }

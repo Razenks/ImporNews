@@ -8,6 +8,18 @@ import { ArticleMore } from './Eleicoes';
 import { Failed } from './RegionBits';
 
 type Period = '1d' | '7d' | '30d';
+type Region = 'tudo' | 'br' | 'mundo';
+
+/** Uma pílula de modalidade/plataforma. `match` são as tags guardadas no banco; `children` abrem um submenu. */
+export interface TagDef {
+  id: string;
+  label: string;
+  match: string[];
+  children?: { id: string; label: string; match: string[] }[];
+}
+
+/** Máximo de botões de veículo (o resto fica acessível pela busca). */
+const MAX_CHIPS = 12;
 const DAYS = { '1d': 1, '7d': 7, '30d': 30 } as const;
 const LABEL = { '1d': 'últimas 24 horas', '7d': 'últimos 7 dias', '30d': 'últimos 30 dias' } as const;
 
@@ -45,14 +57,33 @@ function Entry({ a, now, lead = false }: { a: Arc; now: number; lead?: boolean }
  * aviso de notícias novas e "mostrar mais". Usada em Tecnologia e Notícias.
  */
 export function ArchiveFeed({
-  cat, now, lead = false, defaultPeriod = '1d', coverage = true,
-}: { cat: string; now: number; lead?: boolean; defaultPeriod?: Period; coverage?: boolean }) {
+  cat, now, lead = false, defaultPeriod = '1d', coverage = true, regions = false, tags,
+}: {
+  cat: string;
+  now: number;
+  lead?: boolean;
+  defaultPeriod?: Period;
+  coverage?: boolean;
+  /** mostra o filtro Tudo · Brasil · Mundo */
+  regions?: boolean;
+  /** pílulas de modalidade/plataforma (esportes e games) */
+  tags?: TagDef[];
+}) {
   const [period, setPeriod] = useState<Period>(defaultPeriod);
   const [group, setGroup] = useState<string | undefined>();
+  const [region, setRegion] = useState<Region>('tudo');
+  const [tagId, setTagId] = useState<string | undefined>();
+  const [subId, setSubId] = useState<string | undefined>();
   const [text, setText] = useState('');
   const q = useDebounced(text, 350).trim() || undefined;
   const days = DAYS[period];
-  const a = useArticles({ cat, days, group, q });
+
+  const tagDef = tags?.find((t) => t.id === tagId);
+  const subDef = tagDef?.children?.find((c) => c.id === subId);
+  const tagParam = (subDef ?? tagDef)?.match.join(',') || undefined;
+  const a = useArticles({ cat, days, group, q, tag: tagParam, region: region === 'tudo' ? undefined : region });
+  const countOf = (match: string[]) => a.tagCounts.filter((t) => match.includes(t.tag)).reduce((s, t) => s + t.n, 0);
+  const pickTag = (id: string | undefined) => { setTagId(id); setSubId(undefined); setGroup(undefined); };
   const listRef = useRef<HTMLUListElement>(null);
   const showMore = async () => {
     const before = listRef.current?.children.length ?? 0;
@@ -62,7 +93,8 @@ export function ArchiveFeed({
 
   const since = new Date(now - days * 86_400_000).toISOString();
   const partial = coverage && days >= 7 ? a.groups.filter((g) => g.oldest > since) : [];
-  const chips = a.groups.filter((g) => g.n > 0 || g.grp === group);
+  const topChips = a.groups.filter((g) => g.n > 0).slice(0, MAX_CHIPS);
+  const chips = group && !topChips.some((g) => g.grp === group) ? [...topChips, ...a.groups.filter((g) => g.grp === group)] : topChips;
   const [first, ...rest] = a.items;
   const useLead = lead && !q && !!first;
   const list = useLead ? rest : a.items;
@@ -80,6 +112,14 @@ export function ArchiveFeed({
             { value: '30d', label: '30 dias' },
           ]}
         />
+        {regions && (
+          <Segmented<Region>
+            label="Origem do veículo"
+            value={region}
+            onChange={(r) => { setRegion(r); setGroup(undefined); }}
+            options={[{ value: 'tudo', label: 'Tudo' }, { value: 'br', label: 'Brasil' }, { value: 'mundo', label: 'Mundo' }]}
+          />
+        )}
         <label className="search">
           <span className="sr">Buscar nestas notícias</span>
           <input
@@ -92,6 +132,33 @@ export function ArchiveFeed({
           />
         </label>
       </div>
+
+      {tags && (
+        <div className="chips tags" role="group" aria-label="Filtrar por modalidade">
+          <button type="button" aria-pressed={!tagId} onClick={() => pickTag(undefined)}>Todos</button>
+          {tags.map((t) => {
+            const n = countOf(t.match);
+            return n > 0 || tagId === t.id ? (
+              <button key={t.id} type="button" aria-pressed={tagId === t.id} onClick={() => pickTag(tagId === t.id ? undefined : t.id)}>
+                {t.label}<b>{n}</b>
+              </button>
+            ) : null;
+          })}
+        </div>
+      )}
+      {tagDef?.children && (
+        <div className="chips tags sub" role="group" aria-label={`Filtrar dentro de ${tagDef.label}`}>
+          <button type="button" aria-pressed={!subId} onClick={() => { setSubId(undefined); setGroup(undefined); }}>Todas as lutas</button>
+          {tagDef.children.map((c) => {
+            const n = countOf(c.match);
+            return n > 0 || subId === c.id ? (
+              <button key={c.id} type="button" aria-pressed={subId === c.id} onClick={() => { setSubId(subId === c.id ? undefined : c.id); setGroup(undefined); }}>
+                {c.label}<b>{n}</b>
+              </button>
+            ) : null;
+          })}
+        </div>
+      )}
 
       {chips.length > 1 && (
         <div className="chips" role="group" aria-label="Filtrar por fonte">
@@ -106,6 +173,8 @@ export function ArchiveFeed({
 
       <p className="archive-info">
         <b>{a.total}</b> {a.total === 1 ? 'notícia' : 'notícias'} · {LABEL[period]}
+        {region !== 'tudo' ? <> · {region === 'br' ? 'veículos do Brasil' : 'veículos do mundo'}</> : null}
+        {(subDef ?? tagDef) ? <> · {(subDef ?? tagDef)!.label}</> : null}
         {q ? <> · busca “{q}”</> : null}
         {days === 30 && <> · o arquivo guarda 30 dias e apaga o resto sozinho</>}
       </p>

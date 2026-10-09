@@ -17,15 +17,29 @@ export async function getText(url: string, timeoutMs = 20_000): Promise<string> 
   return (await request(url, '*/*', timeoutMs)).text();
 }
 
-const ENTITIES: Record<string, string> = {
-  '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'",
+const NAMED: Record<string, string> = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  ndash: '–', mdash: '—', hellip: '…', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', bull: '•', middot: '·',
+  eacute: 'é', egrave: 'è', ecirc: 'ê', aacute: 'á', agrave: 'à', acirc: 'â', atilde: 'ã', iacute: 'í', oacute: 'ó',
+  ocirc: 'ô', otilde: 'õ', uacute: 'ú', ccedil: 'ç', ntilde: 'ñ', uuml: 'ü', ouml: 'ö', auml: 'ä',
 };
 
-/** Remove tags HTML e decodifica entidades básicas. */
+/** Decodifica entidades HTML: nomeadas (&amp;), decimais (&#8220;) e hexadecimais (&#x201C;). */
+function decodeEntities(s: string): string {
+  return s.replace(/&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]{2,8}));/gi, (m, dec, hex, name) => {
+    try {
+      if (dec) return String.fromCodePoint(Number(dec));
+      if (hex) return String.fromCodePoint(parseInt(hex, 16));
+      return NAMED[String(name).toLowerCase()] ?? m;
+    } catch {
+      return m;
+    }
+  });
+}
+
+/** Remove tags HTML e decodifica entidades. */
 export function plain(html: unknown, max = 240): string {
-  const text = String(html ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&(nbsp|amp|lt|gt|quot|apos|#39);/g, (m) => ENTITIES[m] ?? m)
+  const text = decodeEntities(String(html ?? '').replace(/<[^>]*>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > max ? text.slice(0, max).replace(/\s+\S*$/, '') + '…' : text;

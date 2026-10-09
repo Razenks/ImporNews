@@ -103,10 +103,10 @@ const SLOW_RETRY = 20_000;
  */
 export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
   const PAGE = 20;
-  const { cat, days, group, q } = query;
-  const [state, setState] = useState<{ items: Arc[]; total: number; groups: ArcGroup[]; loading: boolean; error: boolean }>({
-    items: [], total: 0, groups: [], loading: true, error: false,
-  });
+  const { cat, days, group, q, tag, region } = query;
+  const [state, setState] = useState<{
+    items: Arc[]; total: number; groups: ArcGroup[]; tagCounts: { tag: string; n: number }[]; loading: boolean; error: boolean;
+  }>({ items: [], total: 0, groups: [], tagCounts: [], loading: true, error: false });
   const [fresh, setFresh] = useState<ArcPage | null>(null);
   const [more, setMore] = useState(false);
   const itemsRef = useRef<Arc[]>([]);
@@ -122,8 +122,8 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
     setState((s) => ({ ...s, loading: true, error: false }));
     setFresh(null);
     const run = () =>
-      fetchArticles({ cat, days, group, q, limit: PAGE })
-        .then((p) => alive && setState({ items: p.items, total: p.total, groups: p.groups, loading: false, error: false }))
+      fetchArticles({ cat, days, group, q, tag, region, limit: PAGE })
+        .then((p) => alive && setState({ items: p.items, total: p.total, groups: p.groups, tagCounts: p.tagCounts ?? [], loading: false, error: false }))
         .catch(() => {
           if (!alive) return;
           if (tries < RETRY_DELAYS.length) {
@@ -138,14 +138,14 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [cat, days, group, q, tick]);
+  }, [cat, days, group, q, tag, region, tick]);
 
   // atualização silenciosa
   useEffect(() => {
     let alive = true;
     const tick = () => {
       if (document.hidden) return;
-      fetchArticles({ cat, days, group, q, limit: PAGE })
+      fetchArticles({ cat, days, group, q, tag, region, limit: PAGE })
         .then((p) => {
           if (!alive) return;
           const have = new Set(itemsRef.current.map((i) => i.url));
@@ -153,7 +153,7 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
           // só avisa se o item é mais novo que o topo atual (evita "novas" por reordenação)
           const top = itemsRef.current[0]?.date ?? '';
           setFresh(novel.some((i) => i.date > top) ? p : null);
-          setState((s) => ({ ...s, total: p.total, groups: p.groups }));
+          setState((s) => ({ ...s, total: p.total, groups: p.groups, tagCounts: p.tagCounts ?? s.tagCounts }));
         })
         .catch(() => {});
     };
@@ -162,11 +162,11 @@ export function useArticles(query: Omit<ArcQuery, 'offset' | 'limit'>) {
       alive = false;
       clearInterval(id);
     };
-  }, [cat, days, group, q]);
+  }, [cat, days, group, q, tag, region]);
 
   const loadMore = (): Promise<void> => {
     setMore(true);
-    return fetchArticles({ cat, days, group, q, limit: PAGE, offset: itemsRef.current.length })
+    return fetchArticles({ cat, days, group, q, tag, region, limit: PAGE, offset: itemsRef.current.length })
       .then((p) => setState((s) => ({ ...s, items: [...s.items, ...p.items.filter((i) => !s.items.some((x) => x.url === i.url))], total: p.total })))
       .catch(() => {})
       .finally(() => setMore(false));

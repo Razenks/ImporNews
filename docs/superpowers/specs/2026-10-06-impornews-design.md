@@ -56,3 +56,8 @@ Cada módulo falha isoladamente: se uma fonte cair, serve o último dado em cach
 ## Adendo — abas Tempo, Notícias locais e Notícias boas (07/10/2026)
 - "Minha região" dividida em Tempo e Notícias locais; bancada passou para Política. 8 abas no total.
 - Notícias boas: coluna `articles.good` (marcada na gravação por `mood.ts`), fontes dedicadas (categoria `boas`) e busca positiva no Google Notícias; "Perto de mim" usa `/api/local/news?good=1`. Interruptor "sem crimes e tragédias" usa `calm=1`.
+
+## Adendo — Games, Esportes e filtro Brasil/Mundo (09/10/2026)
+- Categorias `esportes` e `games` no arquivo; colunas `articles.tag` (modalidade/plataforma) e `articles.region` ('br' | 'mundo').
+- `GET /api/articles` ganhou `tag` (lista separada por vírgula), `region` e devolve `tagCounts` para as pílulas.
+- Barra inferior rola de lado no celular (10 abas); menu lateral lista todas no computador.

@@ -1,7 +1,8 @@
 import { getJson, getText, plain } from '../http.js';
 import { fetchFeed, pool, type FeedDef, type Row } from './feeds.js';
 import { ingest } from '../db.js';
-import { googleNews, GN } from './local.js';
+import { googleNews, GN, GN_EN } from './local.js';
+import { gameTagOf } from '../games.js';
 import { isGood } from '../mood.js';
 
 /**
@@ -30,7 +31,7 @@ export const FEEDS: FeedDef[] = [
   { source: 'The Register', cat: 'tech-mundo', url: 'https://www.theregister.com/headlines.atom' },
 
   // ── Boas notícias (sites feitos para isso; o filtro tira o que for pesado) ──────
-  { source: 'Só Notícia Boa', cat: 'boas', url: 'https://www.sonoticiaboa.com.br/feed/' },
+  { source: 'Só Notícia Boa', cat: 'boas', region: 'br', url: 'https://www.sonoticiaboa.com.br/feed/' },
   { source: 'Good News Network', cat: 'boas', url: 'https://www.goodnewsnetwork.org/feed/' },
   { source: 'Reasons to be Cheerful', cat: 'boas', url: 'https://reasonstobecheerful.world/feed/' },
   { source: 'Optimist Daily', cat: 'boas', url: 'https://www.optimistdaily.com/feed/' },
@@ -52,6 +53,57 @@ export const FEEDS: FeedDef[] = [
   { source: 'Hugging Face', cat: 'empresas', url: 'https://huggingface.co/blog/feed.xml' },
   { source: 'Mistral AI', cat: 'empresas', url: 'https://mistral.ai/rss.xml' },
   { source: 'Cloudflare', cat: 'empresas', url: 'https://blog.cloudflare.com/rss/' },
+
+  // ── Esportes: canais gerais (a modalidade é descoberta pelo texto de cada notícia) ──
+  { source: 'ge', cat: 'esportes', region: 'br', url: 'https://ge.globo.com/rss/ge/' },
+  { source: 'ESPN Brasil', cat: 'esportes', region: 'br', url: 'https://www.espn.com.br/espn/rss/news' },
+  { source: 'Gazeta Esportiva', cat: 'esportes', region: 'br', url: 'https://www.gazetaesportiva.com/feed/' },
+  { source: 'Folha Esporte', cat: 'esportes', region: 'br', url: 'https://feeds.folha.uol.com.br/esporte/rss091.xml' },
+  { source: 'Placar', cat: 'esportes', region: 'br', url: 'https://placar.com.br/feed/' },
+  { source: 'Motorsport.com Brasil', cat: 'esportes', region: 'br', url: 'https://motorsport.uol.com.br/rss/all/news/' },
+  { source: 'BBC Sport', cat: 'esportes', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
+  { source: 'ESPN', cat: 'esportes', url: 'https://www.espn.com/espn/rss/news' },
+  { source: 'Autosport', cat: 'esportes', url: 'https://www.autosport.com/rss/feed/all' },
+  { source: 'The Race', cat: 'esportes', url: 'https://www.the-race.com/feed/' },
+  // …e canais de uma modalidade só (a modalidade já é conhecida)
+  { source: 'Trivela', cat: 'esportes', region: 'br', tag: 'futebol', url: 'https://trivela.com.br/feed/' },
+  { source: 'BBC Football', cat: 'esportes', tag: 'futebol', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { source: 'ESPN Soccer', cat: 'esportes', tag: 'futebol', url: 'https://www.espn.com/espn/rss/soccer/news' },
+  { source: 'CBS Sports Soccer', cat: 'esportes', tag: 'futebol', url: 'https://www.cbssports.com/rss/headlines/soccer/' },
+  { source: 'BBC F1', cat: 'esportes', tag: 'f1', url: 'https://feeds.bbci.co.uk/sport/formula1/rss.xml' },
+  { source: 'Motorsport.com F1', cat: 'esportes', tag: 'f1', url: 'https://www.motorsport.com/rss/f1/news/' },
+  { source: 'Motorsport.com MotoGP', cat: 'esportes', tag: 'motogp', url: 'https://www.motorsport.com/rss/motogp/news/' },
+  { source: 'Crash.net', cat: 'esportes', tag: 'motogp', url: 'https://www.crash.net/rss/motogp' },
+  { source: 'ESPN NBA', cat: 'esportes', tag: 'basquete', url: 'https://www.espn.com/espn/rss/nba/news' },
+  { source: 'CBS Sports NBA', cat: 'esportes', tag: 'basquete', url: 'https://www.cbssports.com/rss/headlines/nba/' },
+  { source: 'BBC Basketball', cat: 'esportes', tag: 'basquete', url: 'https://feeds.bbci.co.uk/sport/basketball/rss.xml' },
+  { source: 'BBC Tennis', cat: 'esportes', tag: 'tenis', url: 'https://feeds.bbci.co.uk/sport/tennis/rss.xml' },
+
+  // ── Games: Brasil ─────────────────────────────────────────────────
+  { source: 'IGN Brasil', cat: 'games', region: 'br', url: 'https://br.ign.com/feed.xml' },
+  { source: 'Adrenaline', cat: 'games', region: 'br', url: 'https://adrenaline.com.br/feed/' },
+  { source: 'Meups', cat: 'games', region: 'br', url: 'https://meups.com.br/feed/' },
+  { source: 'Critical Hits', cat: 'games', region: 'br', url: 'https://criticalhits.com.br/feed/' },
+  { source: 'GameVicio', cat: 'games', region: 'br', url: 'https://www.gamevicio.com/rss/' },
+  { source: 'PSX Brasil', cat: 'games', region: 'br', tag: 'playstation', url: 'https://psxbrasil.com.br/feed/' },
+  { source: 'Nintendo Blast', cat: 'games', region: 'br', tag: 'nintendo', url: 'https://www.nintendoblast.com.br/feeds/posts/default' },
+  { source: 'Mais Esports', cat: 'games', region: 'br', tag: 'esports', url: 'https://maisesports.com.br/feed/' },
+  // ── Games: mundo ──────────────────────────────────────────────────
+  { source: 'IGN', cat: 'games', url: 'https://feeds.ign.com/ign/all' },
+  { source: 'GameSpot', cat: 'games', url: 'https://www.gamespot.com/feeds/news/' },
+  { source: 'Eurogamer', cat: 'games', url: 'https://www.eurogamer.net/feed' },
+  { source: 'PC Gamer', cat: 'games', tag: 'pc', url: 'https://www.pcgamer.com/rss/' },
+  { source: 'Kotaku', cat: 'games', url: 'https://kotaku.com/rss' },
+  { source: 'Polygon', cat: 'games', url: 'https://www.polygon.com/rss/index.xml' },
+  { source: 'Rock Paper Shotgun', cat: 'games', tag: 'pc', url: 'https://www.rockpapershotgun.com/feed' },
+  { source: 'VGC', cat: 'games', url: 'https://www.videogameschronicle.com/feed/' },
+  { source: 'GamesRadar', cat: 'games', url: 'https://www.gamesradar.com/rss/' },
+  { source: 'Destructoid', cat: 'games', url: 'https://www.destructoid.com/feed/' },
+  { source: 'Dexerto', cat: 'games', url: 'https://www.dexerto.com/feed/' },
+  { source: 'Nintendo Life', cat: 'games', tag: 'nintendo', url: 'https://www.nintendolife.com/feeds/latest' },
+  { source: 'Push Square', cat: 'games', tag: 'playstation', url: 'https://www.pushsquare.com/feeds/latest' },
+  { source: 'PlayStation Blog', cat: 'games', tag: 'playstation', url: 'https://blog.playstation.com/feed/' },
+  { source: 'Xbox Wire', cat: 'games', tag: 'xbox', url: 'https://news.xbox.com/en-us/feed/' },
 ];
 
 // ── Hacker News (API de busca oficial, com filtro por data) ───────────
@@ -160,7 +212,67 @@ async function fetchGoogleGood(days: number): Promise<Row[]> {
   const items = await googleNews(GN(`search?q=${encodeURIComponent(`${GOOD_Q} when:${days}d`)}`));
   return items
     .filter((i) => isGood(i.title))
-    .map((i) => ({ url: i.url, source: i.source, grp: i.source, cat: 'boas' as const, title: i.title, summary: '', image: null, date: i.date }));
+    .map((i) => ({ url: i.url, source: i.source, grp: i.source, cat: 'boas' as const, title: i.title, summary: '', image: null, date: i.date, region: 'br' as const }));
+}
+
+// ── Esportes por modalidade, em português, via Google Notícias ──────────
+// (para F1, MotoGP, basquete, vôlei e lutas quase não há feed brasileiro dedicado)
+
+const SPORT_QUERIES: [tag: string, query: string][] = [
+  ['f1', '("Fórmula 1" OR F1 OR Verstappen OR Bortoleto OR "GP de")'],
+  ['motogp', '(MotoGP OR "Marc Márquez" OR Bagnaia)'],
+  ['basquete', '(basquete OR NBA OR NBB OR "Liga Ouro")'],
+  ['volei', '(vôlei OR voleibol OR Superliga OR "Liga das Nações de vôlei")'],
+  ['tenis', '(tênis OR ATP OR WTA OR "João Fonseca" OR "Roland Garros" OR Wimbledon)'],
+  ['fisiculturismo', '(fisiculturismo OR fisiculturista OR "Mr. Olympia" OR bodybuilding)'],
+  ['mma', '(UFC OR MMA)'],
+  ['boxe', '(boxe OR boxeador)'],
+  ['judo', '(judô OR judoca)'],
+  ['muaythai', '("muay thai" OR kickboxing)'],
+  ['jiujitsu', '("jiu-jitsu" OR BJJ OR ADCC)'],
+  ['lutas', '(karatê OR taekwondo OR capoeira OR "luta livre")'],
+  ['olimpicos', '(atletismo OR natação OR ginástica OR surfe OR skate OR Olimpíadas OR "Time Brasil")'],
+];
+
+async function fetchGoogleSport(tag: string, query: string, days: number): Promise<Row[]> {
+  const items = await googleNews(GN(`search?q=${encodeURIComponent(`${query} when:${days}d`)}`));
+  return items.map((i) => ({
+    url: i.url, source: i.source, grp: i.source, cat: 'esportes' as const,
+    title: i.title, summary: '', image: null, date: i.date, tag, region: 'br' as const,
+  }));
+}
+
+// O "mundo" das modalidades que não têm feed internacional: mesma busca, em inglês.
+const SPORT_QUERIES_EN: [tag: string, query: string][] = [
+  ['volei', '(volleyball OR VNL)'],
+  ['tenis', '(tennis OR ATP OR WTA)'],
+  ['fisiculturismo', '(bodybuilding OR "Mr. Olympia")'],
+  ['mma', '(UFC OR MMA)'],
+  ['boxe', '(boxing)'],
+  ['judo', '(judo)'],
+  ['muaythai', '("muay thai" OR kickboxing)'],
+  ['jiujitsu', '("jiu-jitsu" OR BJJ OR ADCC)'],
+  ['lutas', '(karate OR taekwondo OR sumo OR "Greco-Roman")'],
+  ['olimpicos', '(athletics OR swimming OR gymnastics OR Olympics)'],
+];
+
+async function fetchGoogleSportEn(tag: string, query: string, days: number): Promise<Row[]> {
+  const items = await googleNews(GN_EN(`search?q=${encodeURIComponent(`${query} when:${days}d`)}`));
+  return items.map((i) => ({
+    url: i.url, source: i.source, grp: i.source, cat: 'esportes' as const,
+    title: i.title, summary: '', image: null, date: i.date, tag, region: 'mundo' as const,
+  }));
+}
+
+// Games do Brasil via Google Notícias (somado aos feeds)
+const GAMES_Q = '(games OR videogame OR PlayStation OR Xbox OR Nintendo OR "Free Fire" OR "League of Legends" OR Steam)';
+
+async function fetchGoogleGames(days: number): Promise<Row[]> {
+  const items = await googleNews(GN(`search?q=${encodeURIComponent(`${GAMES_Q} when:${days}d`)}`));
+  return items.map((i) => ({
+    url: i.url, source: i.source, grp: i.source, cat: 'games' as const,
+    title: i.title, summary: '', image: null, date: i.date, tag: gameTagOf(i.title), region: 'br' as const,
+  }));
 }
 
 // ── Coleta ───────────────────────────────────────────────────────────
@@ -178,6 +290,9 @@ export async function collectTech(): Promise<CollectStats> {
     ...FEEDS.map((f) => ({ name: f.source, run: () => fetchFeed(f) })),
     { name: 'Hacker News', run: () => fetchHackerNews(2, 120) },
     { name: 'Google Notícias · boas', run: () => fetchGoogleGood(3) },
+    ...SPORT_QUERIES.map(([tag, q]) => ({ name: `Google Notícias · ${tag}`, run: () => fetchGoogleSport(tag, q, 3) })),
+    ...SPORT_QUERIES_EN.map(([tag, q]) => ({ name: `Google News · ${tag}`, run: () => fetchGoogleSportEn(tag, q, 3) })),
+    { name: 'Google Notícias · games', run: () => fetchGoogleGames(3) },
     { name: 'Anthropic', run: fetchAnthropic },
   ];
   const results = await pool(jobs, 6, (j) => j.run());
@@ -215,5 +330,10 @@ export async function backfillTech(days = 30): Promise<number> {
 
   added += await ingest(await fetchHackerNews(days, 200, 2).catch(() => []));
   added += await ingest(await fetchGoogleGood(days).catch(() => []));
+  const sport = await pool(SPORT_QUERIES, 3, ([tag, q]) => fetchGoogleSport(tag, q, days));
+  for (const r of sport) if (r.status === 'fulfilled') added += await ingest(r.value);
+  const sportEn = await pool(SPORT_QUERIES_EN, 3, ([tag, q]) => fetchGoogleSportEn(tag, q, days));
+  for (const r of sportEn) if (r.status === 'fulfilled') added += await ingest(r.value);
+  added += await ingest(await fetchGoogleGames(days).catch(() => []));
   return added;
 }

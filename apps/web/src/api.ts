@@ -42,6 +42,7 @@ export interface Article {
 
 /** Notícia do arquivo (guardada no banco por até 31 dias). */
 export interface Arc {
+  tag?: string;
   url: string;
   source: string;
   grp: string;
@@ -62,12 +63,18 @@ export interface ArcPage {
   items: Arc[];
   total: number;
   groups: ArcGroup[];
+  /** quantas notícias por modalidade/plataforma no período (esportes e games) */
+  tagCounts?: { tag: string; n: number }[];
 }
 
 export interface ArcQuery {
   cat: string;
   days: 1 | 7 | 30;
   group?: string;
+  /** modalidades/plataformas, separadas por vírgula */
+  tag?: string;
+  /** só veículos do Brasil ('br') ou do mundo ('mundo') */
+  region?: 'br' | 'mundo';
   q?: string;
   limit?: number;
   offset?: number;
@@ -188,6 +195,8 @@ export function fetchArticles(q: ArcQuery): Promise<ArcPage> {
   const p = new URLSearchParams({ cat: q.cat, days: String(q.days), limit: String(q.limit ?? 20) });
   if (q.offset) p.set('offset', String(q.offset));
   if (q.group) p.set('group', q.group);
+  if (q.tag) p.set('tag', q.tag);
+  if (q.region) p.set('region', q.region);
   if (q.q) p.set('q', q.q);
   return get<ArcPage>(`/api/articles?${p}`);
 }

@@ -26,6 +26,9 @@ const DIRECT: Record<string, FeedDef[]> = {
   ],
 };
 
+/** Google Notícias em inglês (EUA): cobertura "do mundo". */
+export const GN_EN = (path: string) => `https://news.google.com/rss/${path}${path.includes('?') ? '&' : '?'}hl=en-US&gl=US&ceid=US:en`;
+
 export const GN = (path: string) => `https://news.google.com/rss/${path}${path.includes('?') ? '&' : '?'}hl=pt-BR&gl=BR&ceid=BR:pt-419`;
 
 /** Só letras, números, espaço e hífen: o texto vai para uma busca externa. */

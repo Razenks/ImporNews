@@ -14,7 +14,7 @@ export function Boas({ bundle, now }: { bundle: Bundle | null; now: number }) {
   const { place } = usePlace();
   return (
     <section id="boas" className="section" aria-labelledby="boas-t" data-sec="boas">
-      <SectionHead id="boas" n="08" title="Notícias boas" env={bundle?.tech} now={now}>
+      <SectionHead id="boas" n="10" title="Notícias boas" env={bundle?.tech} now={now}>
         <Segmented<Scope>
           label="Onde"
           value={scope}
@@ -28,7 +28,7 @@ export function Boas({ bundle, now }: { bundle: Bundle | null; now: number }) {
         então pode escapar uma manchete ou outra.
       </p>
       {scope === 'geral' ? (
-        <ArchiveFeed key="geral" cat="boas" now={now} defaultPeriod="7d" coverage={false} />
+        <ArchiveFeed key="geral" cat="boas" now={now} defaultPeriod="7d" coverage={false} regions />
       ) : !place ? (
         <Onboard
           title="Boas notícias perto de você"

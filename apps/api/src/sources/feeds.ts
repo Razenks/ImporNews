@@ -1,7 +1,15 @@
 import { XMLParser } from 'fast-xml-parser';
 import { getText, plain } from '../http.js';
+import { sportOf } from '../sports.js';
+import { gameTagOf } from '../games.js';
 
-export type Cat = 'brasil' | 'tech-br' | 'tech-mundo' | 'empresas' | 'boas';
+export type Cat = 'brasil' | 'tech-br' | 'tech-mundo' | 'empresas' | 'boas' | 'esportes' | 'games';
+
+/** Origem do veículo: Brasil ou o resto do mundo. */
+export type Region = 'br' | 'mundo';
+
+/** Região "padrão" de cada categoria, quando a fonte não diz. */
+export const regionOf = (cat: Cat): Region => (cat === 'brasil' || cat === 'tech-br' ? 'br' : 'mundo');
 
 /** Uma notícia pronta para o arquivo. */
 export interface Row {
@@ -13,6 +21,10 @@ export interface Row {
   summary: string;
   image: string | null;
   date: string; // ISO
+  /** modalidade (esportes) ou plataforma (games): futebol, f1, playstation… */
+  tag?: string;
+  /** o veículo é do Brasil ou do mundo */
+  region?: Region;
 }
 
 export interface FeedDef {
@@ -22,6 +34,10 @@ export interface FeedDef {
   url: string;
   /** Páginas extras (?paged=N) para buscar histórico na primeira carga. */
   pages?: number;
+  /** Esportes/games: modalidade ou plataforma fixa do feed (sem isso, é classificada pelo texto). */
+  tag?: string;
+  /** Veículo do Brasil ou do mundo (sem isso, vale o padrão da categoria). */
+  region?: Region;
 }
 
 // Feeds trazem HTML escapado dentro de <description>; o limite padrão de expansões é baixo demais.
@@ -107,15 +123,18 @@ export function parseFeed(text: string, def: FeedDef): Row[] {
     if (now - t > MAX_AGE) continue;
 
     const html = (str(it['content:encoded']) || str(it.content) || str(it.description) || str(it.summary)).slice(0, 8000);
+    const summary = summaryOf(str(it.description) || str(it.summary) || html, title);
     out.push({
       url,
       source: def.source,
       grp: def.grp ?? def.source,
       cat: def.cat,
       title,
-      summary: summaryOf(str(it.description) || str(it.summary) || html, title),
+      summary,
       image: imageOf(it, html),
       date: new Date(t).toISOString(),
+      tag: def.cat === 'esportes' ? (def.tag ?? sportOf(title, summary)) : def.cat === 'games' ? (def.tag ?? gameTagOf(title, summary)) : undefined,
+      region: def.region ?? regionOf(def.cat),
     });
   }
   return out;

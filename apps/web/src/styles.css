@@ -832,6 +832,38 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
   .place-chip.wide { min-height: 38px; }
 }
 
+/* barra inferior com muitas abas: rola de lado no celular e vira grade a partir do tablet */
+.tabbar ol {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+.tabbar ol::-webkit-scrollbar { display: none; }
+.tabbar li { flex: 0 0 auto; min-width: 66px; scroll-snap-align: center; }
+@media (min-width: 700px) {
+  .tabbar ol { display: grid; grid-template-columns: repeat(10, 1fr); overflow: visible; -webkit-mask-image: none; mask-image: none; }
+  .tabbar li { min-width: 0; }
+}
+.chips.tags button { min-height: 36px; }
+.chips.tags.sub { margin-top: 8px; }
+.chips.tags.sub button { border-style: dashed; }
+.chips.tags.sub button[aria-pressed='true'] { border-style: solid; }
+.rail { overflow-y: auto; }
+
+@media (min-width: 1100px) and (max-height: 880px) {
+  .rail { padding-top: 22px; padding-bottom: 18px; }
+  .railnav { margin-top: 16px; }
+  .rail-tools { margin-top: 18px; }
+  .railnav button { padding-top: 7px; padding-bottom: 7px; }
+  .railnav .nav-l { font-size: 14px; }
+  .rail-foot p { display: none; }
+}
+
 /* listas de notícias em colunas no computador */
 @media (min-width: 900px) {
   .plain-list .feed,
