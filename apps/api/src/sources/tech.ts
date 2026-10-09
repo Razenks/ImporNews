@@ -81,7 +81,7 @@ export const FEEDS: FeedDef[] = [
 
   // ── Games: Brasil ─────────────────────────────────────────────────
   { source: 'IGN Brasil', cat: 'games', region: 'br', url: 'https://br.ign.com/feed.xml' },
-  { source: 'Adrenaline', cat: 'games', region: 'br', url: 'https://adrenaline.com.br/feed/' },
+  { source: 'Adrenaline', cat: 'games', region: 'br', url: 'https://www.adrenaline.com.br/feed/' },
   { source: 'Meups', cat: 'games', region: 'br', url: 'https://meups.com.br/feed/' },
   { source: 'Critical Hits', cat: 'games', region: 'br', url: 'https://criticalhits.com.br/feed/' },
   { source: 'GameVicio', cat: 'games', region: 'br', url: 'https://www.gamevicio.com/rss/' },
