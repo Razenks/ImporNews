@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Bundle, Indicator, Point, Quote } from '../api';
-import { CountUp, Delta, Flash, Segmented, SectionHead, Skeleton, Spark } from '../components';
+import { CountUp, Delta, Flash, Segmented, SectionHead, Skeleton, Soon, Spark } from '../components';
 import { arrow, dec, dir, dayMonth, intl, monthYear, money } from '../format';
 import { useHistories } from '../hooks';
 
@@ -137,6 +137,7 @@ export function Mercado({ bundle, quotes, now }: { bundle: Bundle | null; quotes
       )}
 
       <Ledger items={indicators} />
+      <Soon items={[{ name: 'Tesouro Direto', what: 'taxas e dívida pública' }]} />
     </section>
   );
 }

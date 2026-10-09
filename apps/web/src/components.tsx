@@ -328,3 +328,21 @@ export function Splash() {
     </div>
   );
 }
+
+/** Fontes oficiais que ainda não estão conectadas: ficam cinza e não clicam. */
+export function Soon({ items }: { items: { name: string; what: string }[] }) {
+  return (
+    <div className="soon">
+      <h3 className="sub-head">Em breve <span>fontes ainda não conectadas</span></h3>
+      <ul>
+        {items.map((i) => (
+          <li key={i.name} aria-disabled="true" title="Ainda não está conectada ao painel">
+            <b>{i.name}</b>
+            <span>{i.what}</span>
+            <em>em breve</em>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MotionToggle, Splash, Ticker } from './components';
+import { MotionToggle, Soon, Splash, Ticker } from './components';
 import { clock } from './format';
 import { useBundle, useLiveQuotes, useNow } from './hooks';
 import { useReveal, useScrollProgress } from './motion';
@@ -211,6 +211,14 @@ export default function App() {
             <Governo bundle={bundle} now={now} />
             <Eleicoes bundle={bundle} now={now} />
             <Bancada now={now} />
+            <section className="section soon-sec" data-sec="politica">
+              <Soon
+                items={[
+                  { name: 'Diário Oficial da União', what: 'leis, decretos e nomeações' },
+                  { name: 'Portal da Transparência', what: 'gastos públicos' },
+                ]}
+              />
+            </section>
           </div>
           <div className="pane" data-active={tab === 'tempo'}>
             <Tempo bundle={bundle} now={now} />

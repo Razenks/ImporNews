@@ -18,7 +18,7 @@ Nada precisa de recarregar a página:
 
 Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado como "desatualizado".
 
-**Plano B das cotações:** a AwesomeAPI limita por IP (erro 429) e servidores de hospedagem compartilham IPs. Se ela recusar, a API usa automaticamente o câmbio do BCE (Frankfurter) e a cripto da Coinbase, e volta para a principal depois de alguns minutos. Opcional: crie uma chave gratuita na AwesomeAPI e coloque em `AWESOMEAPI_TOKEN` na Railway para ter mais limite.
+**Plano B das cotações:** a AwesomeAPI limita por IP (erro 429) e servidores de hospedagem compartilham IPs. Se ela recusar, a API usa automaticamente o câmbio do BCE (Frankfurter) e a cripto da Coinbase, e volta para a principal depois de alguns minutos. **Câmbio em tempo real (recomendado):** sem chave, a AwesomeAPI limita a 100 requisições e os servidores da Railway dividem o mesmo IP, então o painel cai no plano B (câmbio diário do BCE). Com uma chave gratuita são 100 mil requisições por mês, sem cache. Crie a conta em awesomeapi.com.br, confirme o e-mail, copie a chave em "API Keys" e coloque na Railway como `AWESOMEAPI_TOKEN=SUA_CHAVE` (o painel usa ~65 mil requisições por mês).
 
 ## Abas
 
@@ -108,7 +108,7 @@ Sem `DATABASE_URL` a API sobe do mesmo jeito, guardando histórico e notícias s
 
 Vêm ligadas por padrão (abertura, entrada ao rolar, expandir ao clicar, hovers, cursor nos gráficos). O botão **Animações** no rodapé / barra lateral desliga tudo e a escolha fica salva no navegador.
 
-## Ainda não incluído
+## Ainda não incluído (aparecem cinza e sem clique, como "Em breve")
 
 - **Apuração do TSE** (2º turno de 25/10): o painel mostra a contagem regressiva, as notícias do tema e um link direto para resultados.tse.jus.br; os arquivos de apuração ainda não foram integrados.
 - Diário Oficial, Portal da Transparência (exige chave), Tesouro, Itamaraty e DATASUS.

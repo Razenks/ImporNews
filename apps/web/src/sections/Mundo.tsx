@@ -1,6 +1,6 @@
 import type { Bundle } from '../api';
 import { ago } from '../format';
-import { Empty, Ext, Img, Item, SectionHead, Skeleton } from '../components';
+import { Empty, Ext, Img, Item, SectionHead, Skeleton, Soon } from '../components';
 import { ArticleMore } from './Eleicoes';
 
 export function Mundo({ bundle, now }: { bundle: Bundle | null; now: number }) {
@@ -45,6 +45,13 @@ export function Mundo({ bundle, now }: { bundle: Bundle | null; now: number }) {
           )}
         </div>
       </div>
+
+      <Soon
+        items={[
+          { name: 'Itamaraty', what: 'alertas para brasileiros no exterior' },
+          { name: 'DATASUS', what: 'vacinação e doenças no Brasil' },
+        ]}
+      />
     </section>
   );
 }
