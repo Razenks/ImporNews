@@ -27,12 +27,12 @@ const SECTIONS = [
   { id: 'mercado', n: '01', label: 'Mercado', anchor: 'mercado', keywords: 'dólar dolar euro libra bitcoin ethereum selic ipca câmbio cotação juros inflação' },
   { id: 'politica', n: '02', label: 'Política', anchor: 'governo', keywords: 'congresso câmara camara senado deputados senadores bancada eleições eleicao votação projeto lei pec 6x1 tse' },
   { id: 'tempo', n: '03', label: 'Tempo', anchor: 'tempo', keywords: 'clima tempo previsão chuva calor frio alerta temperatura inmet umidade' },
-  { id: 'local', n: '04', label: 'Notícias locais', short: 'Local', anchor: 'local', keywords: 'cidade estado região local notícias daqui bairro campo grande' },
-  { id: 'mundo', n: '05', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
-  { id: 'tecnologia', n: '06', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
-  { id: 'games', n: '07', label: 'Games', anchor: 'games', keywords: 'jogos videogame playstation ps5 xbox nintendo switch pc steam mobile esports lol free fire valorant' },
-  { id: 'esportes', n: '08', label: 'Esportes', anchor: 'esportes', keywords: 'futebol f1 formula 1 motogp basquete nba vôlei volei tênis fisiculturismo artes marciais judô judo muay thai jiu-jitsu ufc mma boxe olimpíadas' },
-  { id: 'noticias', n: '09', label: 'Notícias', short: 'Brasil', anchor: 'noticias', keywords: 'agência brasil ibge brasil manchetes' },
+  { id: 'mundo', n: '04', label: 'Mundo', anchor: 'mundo', keywords: 'onu oms internacional guerra crise saúde surto' },
+  { id: 'tecnologia', n: '05', label: 'Tecnologia', short: 'Tech', anchor: 'tecnologia', keywords: 'tech nvidia apple openai google anthropic microsoft meta ia inteligência artificial celular' },
+  { id: 'games', n: '06', label: 'Games', anchor: 'games', keywords: 'jogos videogame playstation ps5 xbox nintendo switch pc steam mobile esports lol free fire valorant' },
+  { id: 'esportes', n: '07', label: 'Esportes', anchor: 'esportes', keywords: 'futebol f1 formula 1 motogp basquete nba vôlei volei tênis fisiculturismo artes marciais judô judo muay thai jiu-jitsu ufc mma boxe olimpíadas' },
+  { id: 'local', n: '08', label: 'Notícias locais', short: 'Local', anchor: 'local', keywords: 'cidade estado região local notícias daqui bairro campo grande' },
+  { id: 'noticias', n: '09', label: 'Notícias gerais', short: 'Gerais', anchor: 'noticias', keywords: 'notícias gerais agência brasil ibge brasil manchetes' },
   { id: 'boas', n: '10', label: 'Notícias boas', short: 'Boas', anchor: 'boas', keywords: 'boas notícias positivas alegria solidariedade conquista esperança feliz' },
 ] as const;
 
@@ -224,11 +224,11 @@ export default function App() {
             <Tempo bundle={bundle} now={now} />
             <Clima bundle={bundle} now={now} />
           </div>
-          <div className="pane" data-active={tab === 'local'}><Locais bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'mundo'}><Mundo bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'tecnologia'}><Tecnologia bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'games'}><Games bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'esportes'}><Esportes bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'local'}><Locais bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'boas'}><Boas bundle={bundle} now={now} /></div>
         </main>

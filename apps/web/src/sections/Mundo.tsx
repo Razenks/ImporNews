@@ -9,7 +9,7 @@ export function Mundo({ bundle, now }: { bundle: Bundle | null; now: number }) {
 
   return (
     <section id="mundo" className="section" aria-labelledby="mundo-t" data-sec="mundo">
-      <SectionHead id="mundo" n="05" title="Mundo" env={[onu, oms]} now={now} />
+      <SectionHead id="mundo" n="04" title="Mundo" env={[onu, oms]} now={now} />
 
       <div className="world">
         <div>

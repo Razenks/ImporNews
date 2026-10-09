@@ -159,7 +159,7 @@ export function Locais({ bundle, now }: { bundle: Bundle | null; now: number }) 
   const { place, openPicker } = usePlace();
   return (
     <section id="local" className="section" aria-labelledby="local-t" data-sec="local">
-      <SectionHead id="local" n="04" title="Notícias locais" env={bundle?.agenciabrasil} now={now} />
+      <SectionHead id="local" n="08" title="Notícias locais" env={bundle?.agenciabrasil} now={now} />
       {!place ? (
         <Onboard
           title="Veja as notícias da sua cidade ou estado"

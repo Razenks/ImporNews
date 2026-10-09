@@ -31,7 +31,7 @@ const SPORTS: TagDef[] = [
 export function Esportes({ bundle, now }: { bundle: Bundle | null; now: number }) {
   return (
     <section id="esportes" className="section" aria-labelledby="esportes-t" data-sec="esportes">
-      <SectionHead id="esportes" n="08" title="Esportes" env={bundle?.tech} now={now} />
+      <SectionHead id="esportes" n="07" title="Esportes" env={bundle?.tech} now={now} />
       <p className="blurb">
         Notícias dos principais canais de esporte do Brasil (ge, ESPN Brasil, Gazeta Esportiva, Folha, Placar, Trivela, Motorsport.com Brasil)
         e do mundo (BBC Sport, ESPN, CBS Sports, Motorsport.com, Autosport, Crash.net, The Race), mais buscas por modalidade.
