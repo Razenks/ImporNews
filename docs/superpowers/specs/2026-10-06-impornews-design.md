@@ -61,3 +61,7 @@ Cada módulo falha isoladamente: se uma fonte cair, serve o último dado em cach
 - Categorias `esportes` e `games` no arquivo; colunas `articles.tag` (modalidade/plataforma) e `articles.region` ('br' | 'mundo').
 - `GET /api/articles` ganhou `tag` (lista separada por vírgula), `region` e devolve `tagCounts` para as pílulas.
 - Barra inferior rola de lado no celular (10 abas); menu lateral lista todas no computador.
+
+## Adendo — aba Devs (22/10/2026)
+- `GET /api/devs?view=trending|novos|atualizados&days=1|7|30&lang=&q=`: Trending vem da página pública do GitHub (parse de HTML, com erro claro se o formato mudar); Novos e Atualizados vêm da API de busca (limitador ~9 consultas/min, `GITHUB_TOKEN` opcional). Cache em memória de 20–30 min; nada é gravado no banco.
+- Aba 11 "Devs" no fim do menu (fácil de mover em `SECTIONS` no App).

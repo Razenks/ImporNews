@@ -9,6 +9,7 @@ import { backfillIbge, fetchAgenciaBrasil, fetchIbge, fetchOms, fetchOnu, toRows
 import { backfillTech, collectTech } from './sources/tech.js';
 import { searchProposicoes } from './sources/gov.js';
 import { bancada, cities, localNews, localWeather } from './sources/local.js';
+import { devs, LANGS } from './sources/repos.js';
 import type { Alerts } from './sources/weather.js';
 import { isUf } from './ufs.js';
 import { memo } from './memo.js';
@@ -161,6 +162,21 @@ app.get<{ Querystring: LocalQ }>('/api/local/alertas', async (req, reply) => {
   const all = (read('alerts')?.data as Alerts | null)?.avisos ?? [];
   const avisos = all.filter((a) => a.ufs.includes(uf));
   return { total: avisos.length, avisos: avisos.slice(0, 12) };
+});
+
+// ── Devs: repositórios do GitHub ─────────────────────────────────────
+app.get<{ Querystring: { view?: string; days?: string; lang?: string; q?: string } }>('/api/devs', async (req, reply) => {
+  const view = (['trending', 'novos', 'atualizados'] as const).find((v) => v === req.query.view) ?? 'trending';
+  const days = ([1, 7, 30] as const).find((d) => d === Number(req.query.days)) ?? 7;
+  const lang = (LANGS as readonly string[]).find((l) => l === req.query.lang);
+  const q = view === 'trending' ? undefined : req.query.q?.trim().slice(0, 60) || undefined;
+  try {
+    const items = await devs({ view, days, lang, q });
+    reply.header('cache-control', 'public, max-age=120');
+    return { view, days, lang: lang ?? null, items };
+  } catch (err) {
+    return reply.code(502).send({ error: err instanceof Error ? err.message : 'GitHub indisponível' });
+  }
 });
 
 // ── Busca ────────────────────────────────────────────────────────────

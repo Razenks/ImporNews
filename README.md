@@ -22,7 +22,7 @@ Cada fonte roda isolada: se uma cair, o painel mostra o último dado bom marcado
 
 ## Abas
 
-Mercado · Política · Tempo · Mundo · Tecnologia · Games · Esportes · Notícias locais · Notícias gerais · Notícias boas
+Mercado · Política · Tempo · Mundo · Tecnologia · Games · Esportes · Notícias locais · Notícias gerais · Notícias boas · Devs
 
 Quem escolhe a região (botão no topo/menu: **estado** e, se quiser, **cidade**, qualquer uma das 5.570 do IBGE) personaliza três abas. A escolha fica salva só naquele aparelho, sem login.
 
@@ -31,6 +31,17 @@ Quem escolhe a região (botão no topo/menu: **estado** e, se quiser, **cidade**
 - **Política → Sua bancada**: deputados e senadores do estado, com link para o perfil de cada um.
 
 As buscas de região são feitas na hora (cache de 10 min no servidor), sem ocupar o banco.
+
+## Devs (GitHub)
+
+Aba **11 Devs**, para acompanhar o código aberto, sem agente de IA: o servidor só consulta o GitHub (`apps/api/src/sources/repos.ts`, rota `/api/devs`).
+
+- **Em alta**: os repositórios que mais ganharam estrelas hoje, na semana ou no mês (lista da página pública github.com/trending, porque o GitHub não tem API para isso; se o formato da página mudar, essa lista avisa que falhou e as outras continuam).
+- **Novos**: criados nas últimas 24 h, 7 ou 30 dias, dos mais estrelados para os menos (API oficial de busca).
+- **Atualizados**: projetos já populares com código novo no período (API oficial).
+- Filtro por **linguagem** (JavaScript, TypeScript, Python, Go, Rust, Java, C#, PHP, Kotlin, Swift, C++, Ruby, Dart) e **busca** por assunto em Novos e Atualizados.
+
+O GitHub limita a busca sem chave (cerca de 10 consultas por minuto por IP). O servidor espaça as consultas e guarda cada lista por 20–30 minutos. Opcional: crie um token gratuito do GitHub (sem nenhuma permissão) e coloque em `GITHUB_TOKEN` na Railway para ter um limite 3x maior.
 
 ## Games e Esportes
 

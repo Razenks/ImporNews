@@ -846,7 +846,7 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
 .tabbar ol::-webkit-scrollbar { display: none; }
 .tabbar li { flex: 0 0 auto; min-width: 66px; scroll-snap-align: center; }
 @media (min-width: 700px) {
-  .tabbar ol { display: grid; grid-template-columns: repeat(10, 1fr); overflow: visible; -webkit-mask-image: none; mask-image: none; }
+  .tabbar ol { display: grid; grid-template-columns: repeat(11, 1fr); overflow: visible; -webkit-mask-image: none; mask-image: none; }
   .tabbar li { min-width: 0; }
 }
 .chips.tags button { min-height: 36px; }
@@ -887,6 +887,13 @@ a.ref:hover { text-decoration: underline; text-underline-offset: 3px; }
 .soon b { font-weight: 600; color: var(--t3); }
 .soon span { flex-basis: 100%; font-size: 12.5px; line-height: 1.4; order: 3; }
 .soon em { margin-left: auto; padding: 2px 6px; border: 1px solid var(--line); font: 400 10px/1.2 var(--mono); font-style: normal; }
+
+/* Devs: cartões de repositório */
+.repo-meta { gap: 6px 14px; }
+.repo-meta .lang { display: inline-flex; align-items: center; gap: 6px; color: var(--t2); }
+.lang-dot { display: inline-block; width: 9px; height: 9px; }
+.repo-meta .gain { color: var(--v2); }
+.owner { font-weight: 400; color: var(--t3); }
 
 /* listas de notícias em colunas no computador */
 @media (min-width: 900px) {

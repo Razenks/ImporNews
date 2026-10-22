@@ -217,3 +217,31 @@ export function openStream(onQuotes: (q: Quote[]) => void, onStatus: (online: bo
   es.onerror = () => onStatus(false);
   return () => es.close();
 }
+
+// ── Devs (GitHub) ────────────────────────────────────────────────────
+export interface Repo {
+  name: string;
+  url: string;
+  description: string;
+  language: string | null;
+  color: string | null;
+  stars: number;
+  forks: number | null;
+  gained: number | null;
+  createdAt: string | null;
+  pushedAt: string | null;
+}
+
+export interface DevsQuery {
+  view: 'trending' | 'novos' | 'atualizados';
+  days: 1 | 7 | 30;
+  lang?: string;
+  q?: string;
+}
+
+export function fetchDevs(q: DevsQuery): Promise<Repo[]> {
+  const p = new URLSearchParams({ view: q.view, days: String(q.days) });
+  if (q.lang) p.set('lang', q.lang);
+  if (q.q) p.set('q', q.q);
+  return get<{ items: Repo[] }>(`/api/devs?${p}`).then((r) => r.items);
+}

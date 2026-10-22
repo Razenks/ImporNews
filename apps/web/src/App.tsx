@@ -6,6 +6,7 @@ import { useReveal, useScrollProgress } from './motion';
 import { PlaceChip, PlacePicker } from './PlacePicker';
 import { SearchPalette } from './SearchPalette';
 import { Clima } from './sections/Clima';
+import { Devs } from './sections/Devs';
 import { Eleicoes } from './sections/Eleicoes';
 import { Governo } from './sections/Governo';
 import { Mercado } from './sections/Mercado';
@@ -34,6 +35,7 @@ const SECTIONS = [
   { id: 'local', n: '08', label: 'Notícias locais', short: 'Local', anchor: 'local', keywords: 'cidade estado região local notícias daqui bairro campo grande' },
   { id: 'noticias', n: '09', label: 'Notícias gerais', short: 'Gerais', anchor: 'noticias', keywords: 'notícias gerais agência brasil ibge brasil manchetes' },
   { id: 'boas', n: '10', label: 'Notícias boas', short: 'Boas', anchor: 'boas', keywords: 'boas notícias positivas alegria solidariedade conquista esperança feliz' },
+  { id: 'devs', n: '11', label: 'Devs', anchor: 'devs', keywords: 'github repositórios repos trending open source código programação linguagem python rust typescript desenvolvedor' },
 ] as const;
 
 type Id = (typeof SECTIONS)[number]['id'];
@@ -231,6 +233,7 @@ export default function App() {
           <div className="pane" data-active={tab === 'local'}><Locais bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'noticias'}><Noticias bundle={bundle} now={now} /></div>
           <div className="pane" data-active={tab === 'boas'}><Boas bundle={bundle} now={now} /></div>
+          <div className="pane" data-active={tab === 'devs'}><Devs now={now} /></div>
         </main>
 
         <footer className="foot">
