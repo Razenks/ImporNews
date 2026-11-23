@@ -6,14 +6,14 @@ import { isBad, isGood } from './mood.js';
  * Armazenamento "memória primeiro":
  *  - todas as consultas (notícias e histórico de cotações) saem da MEMÓRIA do servidor;
  *  - o Neon (Postgres) serve só para o que sobrevive a reinícios: uma leitura ao iniciar
- *    e gravações em lote a cada 20 min. Assim o banco pode "dormir" quase o tempo todo
+ *    e gravações em lote a cada 1 h. Assim o banco pode "dormir" quase o tempo todo
  *    (economiza a cota do plano gratuito) e, se ele cair ou estourar a cota, o site continua
  *    funcionando e volta a gravar sozinho quando o banco voltar.
  */
 
 export interface Point { t: number; v: number }
 
-const FLUSH_EVERY = 20 * 60_000;
+const FLUSH_EVERY = 60 * 60_000;
 const RECONNECT_EVERY = 30 * 60_000;
 
 let pool: pg.Pool | null = null;
@@ -205,6 +205,8 @@ export async function flush(): Promise<void> {
   }
 }
 
+let lastDbPurge = 0;
+
 /** Faxina agendada: apaga notícias com mais de 31 dias e cotações com mais de 8 dias. */
 export async function purgeOld(): Promise<{ articles: number; quotes: number }> {
   const limit = Date.now() - ARCHIVE_DAYS * 86_400_000;
@@ -212,7 +214,9 @@ export async function purgeOld(): Promise<{ articles: number; quotes: number }> 
   for (const [u, r] of articles) if (Date.parse(r.date) < limit) { articles.delete(u); dirty.delete(u); local++; }
   const qLimit = Date.now() - 8 * 86_400_000;
   for (const [s, arr] of qMem) qMem.set(s, arr.filter((p) => p.t >= qLimit));
-  if (!pool) return { articles: local, quotes: 0 };
+  // a faxina do banco acorda o Neon: no máximo 1 vez por dia
+  if (!pool || Date.now() - lastDbPurge < 24 * 3_600_000) return { articles: local, quotes: 0 };
+  lastDbPurge = Date.now();
   try {
     const a = await pool.query(`delete from articles where published_at < now() - ($1::int * interval '1 day')`, [ARCHIVE_DAYS]);
     const q = await pool.query(`delete from quote_history where ts < now() - interval '8 days'`);
@@ -293,12 +297,12 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
 
 // ── histórico de cotações ────────────────────────────────────────────
 
-const SAMPLE_EVERY = 5 * 60_000; // um ponto a cada 5 min por moeda
+const SAMPLE_EVERY = 10 * 60_000; // um ponto a cada 10 min por moeda
 const qMem = new Map<string, Point[]>();
 const qLast = new Map<string, number>();
 let qPending: { symbol: string; value: number; t: number }[] = [];
 
-/** Guarda um ponto de cada cotação a cada 5 min (em memória; vai para o banco em lote). */
+/** Guarda um ponto de cada cotação a cada 10 min (em memória; vai para o banco em lote). */
 export async function recordQuotes(rows: { symbol: string; value: number }[]): Promise<void> {
   const now = Date.now();
   for (const r of rows) {

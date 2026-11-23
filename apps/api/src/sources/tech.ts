@@ -84,7 +84,7 @@ export const FEEDS: FeedDef[] = [
   { source: 'Adrenaline', cat: 'games', region: 'br', url: 'https://www.adrenaline.com.br/feed/' },
   { source: 'Meups', cat: 'games', region: 'br', url: 'https://meups.com.br/feed/' },
   { source: 'Critical Hits', cat: 'games', region: 'br', url: 'https://criticalhits.com.br/feed/' },
-  { source: 'GameVicio', cat: 'games', region: 'br', url: 'https://www.gamevicio.com/rss/' },
+  { source: 'GameVicio', cat: 'games', region: 'br', url: 'https://www.gamevicio.com/feed/' },
   { source: 'PSX Brasil', cat: 'games', region: 'br', tag: 'playstation', url: 'https://psxbrasil.com.br/feed/' },
   { source: 'Nintendo Blast', cat: 'games', region: 'br', tag: 'nintendo', url: 'https://www.nintendoblast.com.br/feeds/posts/default' },
   { source: 'Mais Esports', cat: 'games', region: 'br', tag: 'esports', url: 'https://maisesports.com.br/feed/' },
@@ -196,6 +196,28 @@ export async function fetchAnthropic(): Promise<Row[]> {
         summary: '',
         image: null,
         date: new Date(t).toISOString(),
+      });
+    }
+  }
+  // Formato atual da página: uma linha de lista por matéria (título, resumo e <time>).
+  if (!out.length) {
+    for (const chunk of html.split('data-listing-row=').slice(1)) {
+      const slug = /<a[^>]*href="\/news\/([^"/]+)"/.exec(chunk)?.[1];
+      const title = /<h3[^>]*>([^<]+)<\/h3>/.exec(chunk)?.[1];
+      const when = /<time[^>]*>([^<]+)<\/time>/.exec(chunk)?.[1];
+      if (!slug || !title || !when || seen.has(slug)) continue;
+      const t = Date.parse(when);
+      if (Number.isNaN(t)) continue;
+      seen.add(slug);
+      out.push({
+        url: `https://www.anthropic.com/news/${slug}`,
+        source: 'Anthropic',
+        grp: 'Anthropic',
+        cat: 'empresas',
+        title: plain(title, 220),
+        summary: plain(/<p>([^<]+)<\/p>/.exec(chunk)?.[1] ?? '', 240),
+        image: null,
+        date: new Date(Math.min(t, Date.now())).toISOString(),
       });
     }
   }
