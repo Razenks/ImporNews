@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { bundle, keys, read, register } from './store.js';
-import { dbReady, history24h, ingest, initDb, purgeOld, queryArticles, recordQuotes, type Point } from './db.js';
+import { dbReady, dbStats, history24h, ingest, initDb, purgeOld, queryArticles, recordQuotes, type Point } from './db.js';
 import { fetchDaily, fetchIndicators, fetchQuotes, type Quote } from './sources/markets.js';
 import { fetchCamara, fetchSenado } from './sources/gov.js';
 import { backfillIbge, fetchAgenciaBrasil, fetchIbge, fetchOms, fetchOnu, toRows } from './sources/news.js';
@@ -60,7 +60,7 @@ app.get('/api/stream', (req, reply) => {
 });
 
 // ── Dados ────────────────────────────────────────────────────────────
-app.get('/api/health', async () => ({ ok: true, db: dbReady(), clients: clients.size, sources: keys() }));
+app.get('/api/health', async () => ({ ok: true, db: dbReady(), archive: dbStats(), clients: clients.size, sources: keys() }));
 app.get('/api/bundle', async () => bundle());
 
 app.get<{ Params: { symbol: string }; Querystring: { range?: string } }>(

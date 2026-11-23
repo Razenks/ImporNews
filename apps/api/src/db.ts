@@ -1,195 +1,183 @@
 import pg from 'pg';
-import { regionOf, type Row } from './sources/feeds.js';
+import { regionOf, type Region, type Row } from './sources/feeds.js';
 import { isBad, isGood } from './mood.js';
+
+/**
+ * Armazenamento "memória primeiro":
+ *  - todas as consultas (notícias e histórico de cotações) saem da MEMÓRIA do servidor;
+ *  - o Neon (Postgres) serve só para o que sobrevive a reinícios: uma leitura ao iniciar
+ *    e gravações em lote a cada 20 min. Assim o banco pode "dormir" quase o tempo todo
+ *    (economiza a cota do plano gratuito) e, se ele cair ou estourar a cota, o site continua
+ *    funcionando e volta a gravar sozinho quando o banco voltar.
+ */
 
 export interface Point { t: number; v: number }
 
-const mem = new Map<string, Point[]>();
+const FLUSH_EVERY = 20 * 60_000;
+const RECONNECT_EVERY = 30 * 60_000;
+
 let pool: pg.Pool | null = null;
-let lastWrite = 0;
+let url: string | undefined;
+
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// ── conexão ──────────────────────────────────────────────────────────
+
+const SCHEMA = `
+  create table if not exists quote_history (
+    symbol text not null,
+    value  double precision not null,
+    ts     timestamptz not null default now()
+  );
+  create index if not exists quote_history_symbol_ts on quote_history (symbol, ts desc);
+
+  create table if not exists articles (
+    url          text primary key,
+    source       text not null,
+    grp          text not null,
+    cat          text not null,
+    title        text not null,
+    summary      text not null default '',
+    image        text,
+    published_at timestamptz not null,
+    fetched_at   timestamptz not null default now()
+  );
+  create index if not exists articles_cat_pub on articles (cat, published_at desc);
+  alter table articles add column if not exists good boolean not null default false;
+  alter table articles add column if not exists tag text;
+  alter table articles add column if not exists region text;
+`;
+
+/** Tenta conectar, criar as tabelas e carregar o que já estava guardado. Nunca lança erro. */
+async function connect(): Promise<boolean> {
+  if (!url) return false;
+  const p = new pg.Pool({ connectionString: url, max: 2, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000 });
+  try {
+    await p.query(SCHEMA);
+    await loadFromDb(p);
+    pool = p;
+    console.log('[db] Neon conectado');
+    return true;
+  } catch (err) {
+    console.warn('[db] indisponível (o site segue funcionando só com a memória):', errMsg(err));
+    await p.end().catch(() => {});
+    return false;
+  }
+}
 
 export async function initDb(): Promise<void> {
-  const url = process.env.DATABASE_URL;
+  url = process.env.DATABASE_URL;
   if (!url) {
-    console.log('[db] DATABASE_URL ausente — histórico só em memória');
+    console.log('[db] DATABASE_URL ausente — tudo em memória');
     return;
   }
-  try {
-    pool = new pg.Pool({ connectionString: url, max: 3, idleTimeoutMillis: 20_000, connectionTimeoutMillis: 10_000 });
-    await pool.query(`
-      create table if not exists quote_history (
-        symbol text not null,
-        value  double precision not null,
-        ts     timestamptz not null default now()
-      );
-      create index if not exists quote_history_symbol_ts on quote_history (symbol, ts desc);
+  await connect();
 
-      create table if not exists articles (
-        url          text primary key,
-        source       text not null,
-        grp          text not null,
-        cat          text not null,
-        title        text not null,
-        summary      text not null default '',
-        image        text,
-        published_at timestamptz not null,
-        fetched_at   timestamptz not null default now()
-      );
-      create index if not exists articles_cat_pub on articles (cat, published_at desc);
+  // ao ser desligado (deploy novo), grava o que está pendente antes de sair
+  process.once('SIGTERM', () => {
+    void Promise.race([flush(), new Promise((r) => setTimeout(r, 4_000))]).finally(() => process.exit(0));
+  });
 
-      -- notícias boas: marcadas na gravação (ver mood.ts)
-      alter table articles add column if not exists good boolean not null default false;
-      create index if not exists articles_good_pub on articles (published_at desc) where good;
-
-      -- esportes: modalidade de cada notícia (futebol, f1, motogp…)
-      alter table articles add column if not exists tag text;
-
-      -- veículo do Brasil ('br') ou do mundo ('mundo')
-      alter table articles add column if not exists region text;
-      create index if not exists articles_region_pub on articles (region, published_at desc);
-      create index if not exists articles_cat_tag_pub on articles (cat, tag, published_at desc);
-    `);
-    await backfillRegion();
-    await markGoodBackfill();
-    console.log('[db] Neon conectado');
-  } catch (err) {
-    console.warn('[db] indisponível, usando memória:', err instanceof Error ? err.message : err);
-    await pool?.end().catch(() => {});
-    pool = null;
-  }
-}
-
-/** Guarda um snapshot das cotações (no máx. 1 por minuto no banco). */
-export async function recordQuotes(rows: { symbol: string; value: number }[]): Promise<void> {
-  const now = Date.now();
-  for (const r of rows) {
-    const arr = mem.get(r.symbol) ?? [];
-    arr.push({ t: now, v: r.value });
-    if (arr.length > 1500) arr.shift();
-    mem.set(r.symbol, arr);
-  }
-  if (!pool || now - lastWrite < 60_000) return;
-  lastWrite = now;
-  try {
-    await pool.query(
-      `insert into quote_history (symbol, value) select * from unnest($1::text[], $2::float8[])`,
-      [rows.map((r) => r.symbol), rows.map((r) => r.value)],
-    );
-  } catch (err) {
-    console.warn('[db] falha ao gravar:', err instanceof Error ? err.message : err);
-  }
-}
-
-/** Últimas 24 h, agrupadas em blocos de 15 min. */
-export async function history24h(symbol: string): Promise<Point[]> {
-  if (pool) {
-    try {
-      const { rows } = await pool.query(
-        `select (extract(epoch from date_bin('15 minutes', ts, timestamptz '2000-01-01')) * 1000)::float8 as t,
-                avg(value)::float8 as v
-           from quote_history
-          where symbol = $1 and ts > now() - interval '24 hours'
-          group by 1 order by 1`,
-        [symbol],
-      );
-      if (rows.length >= 2) return rows as Point[];
-    } catch (err) {
-      console.warn('[db] falha ao ler:', err instanceof Error ? err.message : err);
-    }
-  }
-  const cutoff = Date.now() - 24 * 3_600_000;
-  return (mem.get(symbol) ?? []).filter((p) => p.t >= cutoff);
+  // grava em lote de tempos em tempos e, se o banco estiver fora, tenta reconectar
+  setInterval(() => void flush(), FLUSH_EVERY).unref();
+  setInterval(() => {
+    if (!pool) void connect().then((ok) => { if (ok) void flush(); });
+  }, RECONNECT_EVERY).unref();
 }
 
 export const dbReady = (): boolean => pool !== null;
 
-// ── Arquivo de notícias ──────────────────────────────────────────────
+export const dbStats = () => ({ connected: pool !== null, articles: articles.size, pendingArticles: dirty.size, pendingQuotes: qPending.length });
+
+// ── notícias (memória + gravação em lote) ────────────────────────────
 
 /** O arquivo guarda 30 dias para consulta; o 31º dia é margem e depois é apagado. */
 export const ARCHIVE_DAYS = 31;
-const memArticles = new Map<string, Row>(); // fallback sem banco
+const MAX_ARTICLES = 40_000;
 
-/**
- * Faxina agendada: apaga notícias com mais de 31 dias e cotações com mais de 8 dias.
- * Roda ao iniciar e a cada 6 horas (ver server.ts). Retorna quantas notícias saíram.
- */
-export async function purgeOld(): Promise<{ articles: number; quotes: number }> {
-  const limit = Date.now() - ARCHIVE_DAYS * 86_400_000;
-  for (const [url, r] of memArticles) if (Date.parse(r.date) < limit) memArticles.delete(url);
-  if (!pool) return { articles: 0, quotes: 0 };
-  const a = await pool.query(`delete from articles where published_at < now() - ($1::int * interval '1 day')`, [ARCHIVE_DAYS]);
-  const q = await pool.query(`delete from quote_history where ts < now() - interval '8 days'`);
-  return { articles: a.rowCount ?? 0, quotes: q.rowCount ?? 0 };
-}
+type Stored = Row & { good: boolean; region: Region };
 
-/** Fontes de "boas notícias" entram como boas, salvo se a manchete for pesada; as demais passam pelo filtro. */
-// notícias de produto/empresa de tecnologia não contam como "boas notícias"
-const TECH_CATS = new Set(['tech-br', 'tech-mundo', 'empresas', 'esportes', 'games']);
-const isGoodRow = (r: Row): boolean =>
-  TECH_CATS.has(r.cat) ? false : r.cat === 'boas' ? !isBad(r.title, r.summary) : isGood(r.title, r.summary);
+const articles = new Map<string, Stored>();
+const dirty = new Set<string>(); // links ainda não gravados no banco
 
-/** Notícias guardadas antes da coluna "region" existir: preenche pela categoria e pela fonte. */
-async function backfillRegion(): Promise<void> {
-  if (!pool) return;
-  const r = await pool.query(
-    `update articles set region = case
-        when cat in ('brasil', 'tech-br') then 'br'
-        when cat = 'boas' and (source = 'Só Notícia Boa' or url like 'https://news.google.com/%') then 'br'
-        else 'mundo' end
-      where region is null`,
+// notícias de produto/empresa de tecnologia, esporte e games não contam como "boas notícias"
+const NOT_GOOD_CATS = new Set(['tech-br', 'tech-mundo', 'empresas', 'esportes', 'games']);
+const isGoodRow = (r: Pick<Row, 'cat' | 'title' | 'summary'>): boolean =>
+  NOT_GOOD_CATS.has(r.cat) ? false : r.cat === 'boas' ? !isBad(r.title, r.summary) : isGood(r.title, r.summary);
+
+// luta de entretenimento (WWE) não é arte marcial
+const WWE = /(wwe|wrestl|ladder match|smackdown|wrestlemania|royal rumble)/i;
+
+/** Lê do banco o que estava guardado (últimos 31 dias) para a memória. Roda ao iniciar/reconectar. */
+async function loadFromDb(p: pg.Pool): Promise<void> {
+  const { rows } = await p.query(
+    `select url, source, grp, cat, title, summary, image, published_at, tag, region
+       from articles where published_at > now() - ($1::int * interval '1 day')`,
+    [ARCHIVE_DAYS],
   );
-  if (r.rowCount) console.log(`[db] região preenchida em ${r.rowCount} notícias`);
-  // luta de entretenimento (WWE) não é arte marcial: tira o que entrou antes de a regra existir
-  await pool.query(
-    `delete from articles where cat = 'esportes' and tag in ('lutas', 'mma')
-       and title ~* '(wwe|wrestl|ladder match|smackdown|wrestlemania|royal rumble)'`,
-  );
-}
-
-/** Recalcula o selo "boa" de tudo o que está guardado (a regra pode ter mudado). Roda ao iniciar. */
-async function markGoodBackfill(): Promise<void> {
-  if (!pool) return;
-  const { rows } = await pool.query(`select url, cat, title, summary, good from articles`);
-  const want = new Set(rows.filter((r) => isGoodRow(r as Row)).map((r) => r.url as string));
-  const toTrue = rows.filter((r) => want.has(r.url) && !r.good).map((r) => r.url as string);
-  const toFalse = rows.filter((r) => !want.has(r.url) && r.good).map((r) => r.url as string);
-  for (let i = 0; i < toTrue.length; i += 500) {
-    await pool.query(`update articles set good = true where url = any($1::text[])`, [toTrue.slice(i, i + 500)]);
+  let n = 0;
+  for (const r of rows) {
+    if (r.tag && ['lutas', 'mma'].includes(r.tag) && WWE.test(r.title)) continue;
+    const row: Row = {
+      url: r.url, source: r.source, grp: r.grp, cat: r.cat, title: r.title, summary: r.summary ?? '',
+      image: r.image, date: new Date(r.published_at).toISOString(), tag: r.tag ?? undefined,
+    };
+    const region: Region =
+      (r.region as Region | null) ??
+      (r.cat === 'boas' && (r.source === 'Só Notícia Boa' || String(r.url).startsWith('https://news.google.com/')) ? 'br' : regionOf(r.cat));
+    // o que já veio coletado nesta execução é mais novo que o do banco: não sobrescreve
+    if (!articles.has(row.url)) articles.set(row.url, { ...row, good: isGoodRow(row), region });
+    n++;
   }
-  for (let i = 0; i < toFalse.length; i += 500) {
-    await pool.query(`update articles set good = false where url = any($1::text[])`, [toFalse.slice(i, i + 500)]);
-  }
-  console.log(`[db] notícias boas: ${want.size} (+${toTrue.length} / -${toFalse.length})`);
+  console.log(`[db] ${n} notícias carregadas do banco para a memória`);
 }
 
 /** Guarda notícias (sem duplicar pelo link). Retorna quantas eram novas. */
 export async function ingest(rows: Row[]): Promise<number> {
   if (!rows.length) return 0;
   const cutoff = Date.now() - ARCHIVE_DAYS * 86_400_000;
-  const fresh = rows.filter((r) => Date.parse(r.date) >= cutoff);
-  if (!fresh.length) return 0;
-
-  if (!pool) {
-    let added = 0;
-    for (const r of fresh) {
-      if (!memArticles.has(r.url)) added++;
-      memArticles.set(r.url, r);
-    }
-    if (memArticles.size > 6000) {
-      const keep = [...memArticles.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5000);
-      memArticles.clear();
-      keep.forEach((r) => memArticles.set(r.url, r));
-    }
-    return added;
-  }
-
-  // sem repetir o mesmo link dentro do mesmo lote (o Postgres recusa)
-  const uniq = [...new Map(fresh.map((r) => [r.url, r])).values()];
   let added = 0;
+  for (const r of rows) {
+    if (Date.parse(r.date) < cutoff) continue;
+    const prev = articles.get(r.url);
+    const region = r.region ?? prev?.region ?? regionOf(r.cat);
+    const next: Stored = {
+      ...r,
+      summary: r.summary || prev?.summary || '',
+      image: prev?.image ?? r.image,
+      tag: r.tag ?? prev?.tag,
+      region,
+      good: isGoodRow(r),
+    };
+    articles.set(r.url, next);
+    if (!prev) {
+      added++;
+      dirty.add(r.url);
+    } else if (prev.title !== next.title || prev.tag !== next.tag || prev.good !== next.good || prev.summary !== next.summary) {
+      dirty.add(r.url);
+    }
+  }
+  trim();
+  return added;
+}
+
+function trim(): void {
+  if (articles.size <= MAX_ARTICLES) return;
+  const keep = [...articles.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, MAX_ARTICLES - 2_000);
+  const keepSet = new Set(keep.map((r) => r.url));
+  for (const u of articles.keys()) if (!keepSet.has(u)) { articles.delete(u); dirty.delete(u); }
+}
+
+/** Grava no banco (em lote) o que ainda não foi gravado. Se o banco estiver fora, tenta de novo depois. */
+export async function flush(): Promise<void> {
+  await flushQuotes();
+  if (!pool || !dirty.size) return;
+  const urls = [...dirty];
+  const batchRows = urls.map((u) => articles.get(u)).filter((r): r is Stored => !!r);
   try {
-    for (let i = 0; i < uniq.length; i += 400) {
-      const b = uniq.slice(i, i + 400);
-      const { rows: res } = await pool.query(
+    for (let i = 0; i < batchRows.length; i += 400) {
+      const b = batchRows.slice(i, i + 400);
+      await pool.query(
         `insert into articles (url, source, grp, cat, title, summary, image, published_at, good, tag, region)
          select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::boolean[], $10::text[], $11::text[])
          on conflict (url) do update
@@ -198,23 +186,44 @@ export async function ingest(rows: Row[]): Promise<number> {
                 image = coalesce(articles.image, excluded.image),
                 good = excluded.good,
                 tag = coalesce(excluded.tag, articles.tag),
-                region = coalesce(excluded.region, articles.region)
-         returning (xmax = 0) as inserted`,
+                region = coalesce(excluded.region, articles.region)`,
         [
           b.map((r) => r.url), b.map((r) => r.source), b.map((r) => r.grp), b.map((r) => r.cat),
           b.map((r) => r.title), b.map((r) => r.summary), b.map((r) => r.image), b.map((r) => r.date),
-          b.map(isGoodRow),
-          b.map((r) => r.tag ?? null),
-          b.map((r) => r.region ?? regionOf(r.cat)),
+          b.map((r) => r.good), b.map((r) => r.tag ?? null), b.map((r) => r.region),
         ],
       );
-      added += res.filter((x) => x.inserted).length;
+      for (const r of b) dirty.delete(r.url);
     }
+    console.log(`[db] gravou ${batchRows.length} notícias em lote`);
   } catch (err) {
-    console.warn('[db] falha ao arquivar notícias:', err instanceof Error ? err.message : err);
+    console.warn('[db] falha ao gravar notícias (tento de novo no próximo lote):', errMsg(err));
+    // se a cota estourou, solta a conexão para o banco poder dormir; a reconexão automática cuida do resto
+    const p = pool;
+    pool = null;
+    void p?.end().catch(() => {});
   }
-  return added;
 }
+
+/** Faxina agendada: apaga notícias com mais de 31 dias e cotações com mais de 8 dias. */
+export async function purgeOld(): Promise<{ articles: number; quotes: number }> {
+  const limit = Date.now() - ARCHIVE_DAYS * 86_400_000;
+  let local = 0;
+  for (const [u, r] of articles) if (Date.parse(r.date) < limit) { articles.delete(u); dirty.delete(u); local++; }
+  const qLimit = Date.now() - 8 * 86_400_000;
+  for (const [s, arr] of qMem) qMem.set(s, arr.filter((p) => p.t >= qLimit));
+  if (!pool) return { articles: local, quotes: 0 };
+  try {
+    const a = await pool.query(`delete from articles where published_at < now() - ($1::int * interval '1 day')`, [ARCHIVE_DAYS]);
+    const q = await pool.query(`delete from quote_history where ts < now() - interval '8 days'`);
+    return { articles: a.rowCount ?? local, quotes: q.rowCount ?? 0 };
+  } catch (err) {
+    console.warn('[db] falha na faxina do banco:', errMsg(err));
+    return { articles: local, quotes: 0 };
+  }
+}
+
+// ── consulta (sempre na memória) ─────────────────────────────────────
 
 export interface ArticleQuery {
   cats: string[];
@@ -243,84 +252,20 @@ export interface ArticlePage {
   tagCounts: { tag: string; n: number }[];
 }
 
-const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => '\\' + c);
-
 export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
   const since = Date.now() - q.days * 86_400_000;
   const goodOnly = q.cats.length === 1 && q.cats[0] === 'boas';
-
-  if (pool) {
-    try {
-      const params: unknown[] = [q.cats, q.days];
-      let where = goodOnly
-        ? `good and $1::text[] is not null and published_at > now() - ($2::int * interval '1 day')`
-        : `cat = any($1::text[]) and published_at > now() - ($2::int * interval '1 day')`;
-      if (q.group) {
-        params.push(q.group);
-        where += ` and grp = $${params.length}`;
-      }
-      if (q.region) {
-        params.push(q.region);
-        where += ` and region = $${params.length}`;
-      }
-      if (q.tags?.length) {
-        params.push(q.tags);
-        where += ` and tag = any($${params.length}::text[])`;
-      }
-      if (q.q) {
-        params.push(`%${likeEscape(q.q)}%`);
-        where += ` and (title ilike $${params.length} or summary ilike $${params.length})`;
-      }
-      const [items, total, groups, tagRows] = await Promise.all([
-        pool.query(
-          `select url, source, grp, cat, title, summary, image, published_at
-             from articles where ${where}
-            order by published_at desc limit ${q.limit} offset ${q.offset}`,
-          params,
-        ),
-        pool.query(`select count(*)::int as n from articles where ${where}`, params),
-        pool.query(
-          `select grp,
-                  (count(*) filter (where published_at > now() - ($2::int * interval '1 day')))::int as n,
-                  min(published_at) as oldest
-             from articles where ${goodOnly ? 'good and $1::text[] is not null' : 'cat = any($1::text[])'}
-            group by grp order by n desc, grp`,
-          [q.cats, q.days],
-        ),
-        goodOnly
-          ? Promise.resolve({ rows: [] as { tag: string; n: number }[] })
-          : pool.query(
-              `select tag, count(*)::int as n from articles
-                where cat = any($1::text[]) and tag is not null
-                  and published_at > now() - ($2::int * interval '1 day')
-                group by tag order by n desc`,
-              [q.cats, q.days],
-            ),
-      ]);
-      return {
-        items: items.rows.map((r) => ({
-          url: r.url, source: r.source, grp: r.grp, cat: r.cat, title: r.title,
-          summary: r.summary, image: r.image, date: new Date(r.published_at).toISOString(),
-        })),
-        total: total.rows[0].n,
-        groups: groups.rows.map((g) => ({ grp: g.grp, n: g.n, oldest: new Date(g.oldest).toISOString() })),
-        tagCounts: tagRows.rows.map((t) => ({ tag: t.tag, n: t.n })),
-      };
-    } catch (err) {
-      console.warn('[db] falha ao consultar notícias:', err instanceof Error ? err.message : err);
-    }
-  }
-
-  // fallback em memória
   const needle = q.q?.toLowerCase();
-  const all = [...memArticles.values()].filter((r) => (goodOnly ? isGoodRow(r) : q.cats.includes(r.cat)));
+
+  const all = [...articles.values()].filter((r) => (goodOnly ? r.good : q.cats.includes(r.cat)));
   const inPeriod = all.filter((r) => Date.parse(r.date) > since);
   const filtered = inPeriod
     .filter((r) => !q.group || r.grp === q.group)
     .filter((r) => !q.tags?.length || (r.tag !== undefined && q.tags.includes(r.tag)))
-    .filter((r) => !q.region || (r.region ?? regionOf(r.cat)) === q.region)
+    .filter((r) => !q.region || r.region === q.region)
     .filter((r) => !needle || r.title.toLowerCase().includes(needle) || r.summary.toLowerCase().includes(needle))
     .sort((a, b) => b.date.localeCompare(a.date));
+
   const g = new Map<string, ArticleGroup>();
   for (const r of all) {
     const cur = g.get(r.grp) ?? { grp: r.grp, n: 0, oldest: r.date };
@@ -328,12 +273,74 @@ export async function queryArticles(q: ArticleQuery): Promise<ArticlePage> {
     if (r.date < cur.oldest) cur.oldest = r.date;
     g.set(r.grp, cur);
   }
+
+  const tagCounts = goodOnly
+    ? []
+    : [...inPeriod.reduce((m, r) => (r.tag ? m.set(r.tag, (m.get(r.tag) ?? 0) + 1) : m), new Map<string, number>())]
+        .map(([tag, n]) => ({ tag, n }))
+        .sort((a, b) => b.n - a.n);
+
   return {
-    items: filtered.slice(q.offset, q.offset + q.limit),
+    items: filtered.slice(q.offset, q.offset + q.limit).map((r) => ({
+      url: r.url, source: r.source, grp: r.grp, cat: r.cat, title: r.title,
+      summary: r.summary, image: r.image, date: r.date, tag: r.tag,
+    })),
     total: filtered.length,
     groups: [...g.values()].sort((a, b) => b.n - a.n || a.grp.localeCompare(b.grp)),
-    tagCounts: [...inPeriod.reduce((m, r) => (r.tag ? m.set(r.tag, (m.get(r.tag) ?? 0) + 1) : m), new Map<string, number>())]
-      .map(([tag, n]) => ({ tag, n }))
-      .sort((a, b) => b.n - a.n),
+    tagCounts,
   };
+}
+
+// ── histórico de cotações ────────────────────────────────────────────
+
+const SAMPLE_EVERY = 5 * 60_000; // um ponto a cada 5 min por moeda
+const qMem = new Map<string, Point[]>();
+const qLast = new Map<string, number>();
+let qPending: { symbol: string; value: number; t: number }[] = [];
+
+/** Guarda um ponto de cada cotação a cada 5 min (em memória; vai para o banco em lote). */
+export async function recordQuotes(rows: { symbol: string; value: number }[]): Promise<void> {
+  const now = Date.now();
+  for (const r of rows) {
+    if (now - (qLast.get(r.symbol) ?? 0) < SAMPLE_EVERY) continue;
+    qLast.set(r.symbol, now);
+    const arr = qMem.get(r.symbol) ?? [];
+    arr.push({ t: now, v: r.value });
+    if (arr.length > 2_500) arr.shift();
+    qMem.set(r.symbol, arr);
+    qPending.push({ symbol: r.symbol, value: r.value, t: now });
+  }
+  if (qPending.length > 5_000) qPending = qPending.slice(-3_000);
+}
+
+async function flushQuotes(): Promise<void> {
+  if (!pool || !qPending.length) return;
+  const batch = qPending;
+  qPending = [];
+  try {
+    await pool.query(
+      `insert into quote_history (symbol, value, ts)
+       select * from unnest($1::text[], $2::float8[], $3::timestamptz[])`,
+      [batch.map((x) => x.symbol), batch.map((x) => x.value), batch.map((x) => new Date(x.t).toISOString())],
+    );
+  } catch (err) {
+    qPending = [...batch, ...qPending].slice(-3_000);
+    console.warn('[db] falha ao gravar cotações:', errMsg(err));
+  }
+}
+
+/** Últimas 24 h, agrupadas em blocos de 15 min (a partir da memória). */
+export async function history24h(symbol: string): Promise<Point[]> {
+  const cutoff = Date.now() - 24 * 3_600_000;
+  const pts = (qMem.get(symbol) ?? []).filter((p) => p.t >= cutoff);
+  const bucket = 15 * 60_000;
+  const m = new Map<number, { s: number; n: number }>();
+  for (const p of pts) {
+    const k = Math.floor(p.t / bucket) * bucket;
+    const c = m.get(k) ?? { s: 0, n: 0 };
+    c.s += p.v;
+    c.n++;
+    m.set(k, c);
+  }
+  return [...m].sort((a, b) => a[0] - b[0]).map(([t, c]) => ({ t, v: c.s / c.n }));
 }
